@@ -5,8 +5,7 @@
 - Status: Draft
 - Author: Taro + Codex brainstorming
 - Date: 2026-04-07
-- Purpose: frame a possible productization path for the current agent workspace and harness as a standalone web app for non-technical users
-- Inspiration: informed in part by the existing local project at `/Users/taro/Projects/leadabeelity`
+- Purpose: frame a possible productization path for the agent workspace at `/Users/taro/Projects/leadabeelity` and harness it as a standalone web app for non-technical users
 
 ## 1. Product Summary
 
@@ -145,6 +144,10 @@ It should not feel like:
 - a generic chatbot with uploads
 - a document repository with an AI wrapper
 
+The product should make the hidden "cloud agent workspace" concept more explicit in the architecture while keeping the user-facing experience framed as a standard SaaS app rather than a developer environment.
+
+In practice, that means the underlying processes can remain agentic and file-backed, with persistent memory, project files, and background workflows, while the default interface stays centered on chat, folders, artifacts, and durable project memory instead of code, prompts, or internal tooling.
+
 ### Longer-Term Product Shape
 
 The long-term direction may evolve beyond a single assistant into:
@@ -243,12 +246,12 @@ Prove that a small team can use the product as a shared AI project advisor and r
 - Basic ingestion and parsing pipeline
 - Source-grounded answers with citations
 - Structured project sections maintained by the assistant:
-    - Overview
-    - Product
-    - Decisions
-    - Work / Next Steps
-    - Memory / Timeline
-    - Operational Snapshot
+  - Overview
+  - Product
+  - Decisions
+  - Work / Next Steps
+  - Memory / Timeline
+  - Operational Snapshot
 - Preview changes before saving important updates to durable memory
 - Search across uploaded materials and generated project artifacts
 - Activity history
@@ -467,11 +470,11 @@ Avoid heavily regulated use cases in the first go-to-market motion unless compli
 - Frontend: Next.js + TypeScript
 - Backend: TypeScript service layer
 - Database: Postgres (supabase)
-- Vector search: pgvector or equivalent
-- File storage: S3-compatible object storage
+- Vector search: Supabase
+- File storage: Supabase
 - Queue / jobs: background worker for ingestion and summarization
-- Auth: managed authentication provider or first-party auth with workspace roles
-- LLM access: model gateway layer so providers can be swapped later
+- Auth: Supabase Auth
+- LLM access: model gateway layer so providers can be swapped later (Verce AI SDK)
 
 ### High-Level Flow
 
@@ -480,7 +483,7 @@ Avoid heavily regulated use cases in the first go-to-market motion unless compli
 3. Background job extracts text, metadata, and attachments
 4. Content is chunked and indexed for retrieval
 5. AI creates:
-    - summary
+  - summary
     - key facts
     - candidate decisions
     - candidate tasks
@@ -746,10 +749,10 @@ Expected deliverables include:
 - Collect examples of recurring project-memory pain
 - Identify the minimum set of source inputs needed for useful answers
 - Sketch the core UI for:
-    - project workspace
-    - chat
-    - source panel
-    - change preview flow
+  - project workspace
+  - chat
+  - source panel
+  - change preview flow
 - Design the initial data model and permissions model
 - Build a thin prototype around upload, retrieval, chat, and durable memory review
 - Define the 3 to 4 flagship use cases to present in the Capex / roadmap narrative
