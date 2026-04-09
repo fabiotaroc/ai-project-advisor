@@ -122,7 +122,7 @@ erDiagram
     }
 
     AUTH_USERS ||--|| PROFILES : "creates profile"
-    PROFILES ||--o{ WORKSPACES : "owns"
+    PROFILES ||--|| WORKSPACES : "owns"
     WORKSPACES ||--o{ WORKSPACE_MEMBERS : "has"
     PROFILES ||--o{ WORKSPACE_MEMBERS : "belongs to"
 
@@ -151,8 +151,10 @@ erDiagram
 
 ## Notes
 
-- `profiles.id` references `auth.users.id`, and a trigger creates or updates the profile when a new auth user is inserted.
+- `profiles.id` references `auth.users.id`, and the signup trigger creates or updates the profile and provisions one personal workspace per user.
+- `workspaces.owner_id` is unique, so each profile owns exactly one workspace.
 - `workspace_members` and `project_members` are join tables with composite primary keys.
+- `workspace_members.user_id` is unique so each user has a single owner membership row for app compatibility while the frontend still reads through `workspace_members`.
 - `project_files` is unique on `(project_id, path)`.
 - `project_file_versions` is unique on `(project_file_id, version)`.
 - `source_chunks.embedding` is a `vector(1536)` column indexed for similarity search.

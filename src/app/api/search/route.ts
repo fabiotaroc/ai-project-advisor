@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { getOptionalSessionUser } from "@/lib/server/auth";
+import { getProjectAccessForUser } from "@/lib/server/data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const schema = z.object({ projectId: z.string().uuid(), query: z.string().min(2) });
 
 export async function POST(request: NextRequest) {
   const body = schema.parse(await request.json());
+  const user = await getOptionalSessionUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!(await getProjectAccessForUser(user.id, body.projectId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const supabase = await createSupabaseServerClient();
 
   const { data: files } = await supabase

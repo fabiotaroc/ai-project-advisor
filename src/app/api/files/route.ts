@@ -1,17 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getOptionalSessionUser } from "@/lib/server/auth";
+import { getProjectAccessForUser } from "@/lib/server/data";
 import { editProjectFile } from "@/lib/server/project-files";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 const schema = z.object({ projectId: z.string().uuid(), path: z.string().min(1), content: z.string() });
 
 export async function POST(request: NextRequest) {
   const body = schema.parse(await request.json());
-  const supabase = await createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getOptionalSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  if (!(await getProjectAccessForUser(user.id, body.projectId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const file = await editProjectFile({ ...body, userId: user.id });
+  const supabase = createSupabaseAdminClient();
   await supabase.from("activity_events").insert({
     project_id: body.projectId,
     event_type: "file_edited",

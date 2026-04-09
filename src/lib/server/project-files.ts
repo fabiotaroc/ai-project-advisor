@@ -1,7 +1,7 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export async function editProjectFile({ projectId, path, content, userId }: { projectId: string; path: string; content: string; userId: string }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
 
   const { data: existing } = await supabase
     .from("project_files")
@@ -18,12 +18,14 @@ export async function editProjectFile({ projectId, path, content, userId }: { pr
       .order("version", { ascending: false })
       .limit(1);
 
-    await supabase.from("project_file_versions").insert({
+    const { error: versionInsertError } = await supabase.from("project_file_versions").insert({
       project_file_id: existing.id,
       content: existing.content,
       version: (versions?.[0]?.version ?? 0) + 1,
       edited_by: userId,
     });
+
+    if (versionInsertError) throw versionInsertError;
 
     const { data, error } = await supabase
       .from("project_files")
@@ -44,12 +46,14 @@ export async function editProjectFile({ projectId, path, content, userId }: { pr
 
   if (error) throw error;
 
-  await supabase.from("project_file_versions").insert({
+  const { error: initialVersionError } = await supabase.from("project_file_versions").insert({
     project_file_id: data.id,
     content: "",
     version: 1,
     edited_by: userId,
   });
+
+  if (initialVersionError) throw initialVersionError;
 
   return data;
 }

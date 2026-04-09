@@ -1,24 +1,22 @@
 import Link from "next/link";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { Button } from "@/components/ui/button";
+import { getSessionUser } from "@/lib/server/auth";
 
 export async function AppHeader() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSessionUser();
 
   return (
-    <header className="border-b border-[var(--line)] bg-white/70 backdrop-blur-sm">
-      <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-5">
-        <Link href="/" className="display text-2xl text-[var(--accent)]">
-          Atelier Advisor
+    <header className="border-b border-border bg-card">
+      <div className="mx-auto flex h-12 max-w-[1400px] items-center justify-between px-5">
+        <Link href="/app" className="text-sm font-semibold tracking-tight text-foreground">
+          Project Advisor
         </Link>
-        <div className="flex items-center gap-3 text-sm text-[var(--ink-soft)]">
-          <span>{user?.email}</span>
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <span className="font-mono text-xs">{user?.email}</span>
           <form action="/auth/signout" method="post">
-            <button className="rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-1.5 text-[var(--ink)] hover:bg-white">
+            <Button type="submit" variant="outline" size="sm">
               Sign out
-            </button>
+            </Button>
           </form>
         </div>
       </div>

@@ -1,6 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import type { ProjectFile } from "@/lib/types";
 
 export function FilesPanel({ projectId, files: initialFiles }: { projectId: string; files: ProjectFile[] }) {
@@ -22,25 +27,59 @@ export function FilesPanel({ projectId, files: initialFiles }: { projectId: stri
   }
 
   return (
-    <section className="grid h-[calc(100vh-9.5rem)] grid-cols-[18rem_1fr] gap-4">
-      <aside className="rounded-2xl border border-[var(--line)] bg-white/70 p-4">
-        <h1 className="display mb-3 text-2xl">Files</h1>
-        <ul className="space-y-1">
-          {files.map((file) => (
-            <li key={file.id}>
-              <button onClick={() => { setSelectedPath(file.path); setContent(file.content); }} className={`w-full rounded px-2 py-1.5 text-left text-sm ${selectedPath === file.path ? "bg-[var(--ink)] text-[var(--paper)]" : "hover:bg-[var(--paper)]"}`}>{file.path}</button>
-            </li>
-          ))}
-        </ul>
-      </aside>
-      <div className="flex flex-col rounded-2xl border border-[var(--line)] bg-white/70">
-        <div className="border-b border-[var(--line)] px-4 py-2">
-          <h2 className="font-mono text-sm">{selectedPath}</h2>
-          {selected ? <p className="text-xs text-[var(--ink-soft)]">Updated {new Date(selected.updated_at).toLocaleString()}</p> : null}
-        </div>
-        <textarea value={content} onChange={(event) => setContent(event.target.value)} className="flex-1 resize-none bg-transparent p-4 font-mono text-sm leading-relaxed outline-none" />
-        <div className="border-t border-[var(--line)] px-4 py-2"><button onClick={saveFile} className="rounded bg-[var(--accent)] px-3 py-1.5 text-sm text-white">Save + version</button></div>
-      </div>
+    <section className="grid h-[calc(100vh-8rem)] grid-cols-[16rem_1fr] gap-3">
+      <Card className="py-0">
+        <CardHeader className="px-3 pt-3 pb-0">
+          <CardTitle className="text-sm font-semibold">Files</CardTitle>
+        </CardHeader>
+        <CardContent className="px-3 pt-2 pb-3">
+          <ul className="flex flex-col gap-0.5">
+            {files.map((file) => (
+              <li key={file.id}>
+                <Button
+                  type="button"
+                  variant={selectedPath === file.path ? "default" : "ghost"}
+                  onClick={() => {
+                    setSelectedPath(file.path);
+                    setContent(file.content);
+                  }}
+                  className={cn(
+                    "h-auto w-full justify-start px-2 py-1.5 text-left font-mono text-xs font-normal shadow-none",
+                  )}
+                >
+                  {file.path}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </CardContent>
+      </Card>
+      <Card className="flex min-h-0 flex-col py-0">
+        <CardHeader className="border-b border-border px-4 py-2.5">
+          <CardTitle className="font-mono text-xs font-medium">{selectedPath}</CardTitle>
+          {selected ? (
+            <p className="text-xs text-muted-foreground">Updated {new Date(selected.updated_at).toLocaleString()}</p>
+          ) : null}
+        </CardHeader>
+        <CardContent className="flex flex-1 px-0 py-0">
+          <div className="flex w-full flex-1">
+            <Label htmlFor="file-content" className="sr-only">
+              File content
+            </Label>
+            <Textarea
+              id="file-content"
+              value={content}
+              onChange={(event) => setContent(event.target.value)}
+              className="h-full min-h-0 flex-1 resize-none rounded-none border-0 bg-transparent p-4 font-mono text-sm leading-relaxed shadow-none focus-visible:ring-0"
+            />
+          </div>
+        </CardContent>
+        <CardFooter className="justify-end px-4 py-2.5">
+          <Button type="button" onClick={saveFile}>
+            Save + version
+          </Button>
+        </CardFooter>
+      </Card>
     </section>
   );
 }

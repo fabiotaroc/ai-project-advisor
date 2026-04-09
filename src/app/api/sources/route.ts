@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { getOptionalSessionUser } from "@/lib/server/auth";
+import { getProjectAccessForUser } from "@/lib/server/data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const schema = z.object({
@@ -13,10 +15,14 @@ const schema = z.object({
 
 export async function POST(request: NextRequest) {
   const body = schema.parse(await request.json());
-  const supabase = await createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getOptionalSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  if (!(await getProjectAccessForUser(user.id, body.projectId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("source_materials")
     .insert({
