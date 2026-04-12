@@ -5,7 +5,6 @@ import {
   Loader2,
   Mail,
   Presentation,
-  FileSpreadsheet,
   FileText,
   MessageSquareText,
   Upload,
@@ -13,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { formatDate } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import type { SourceMaterial } from "@/lib/types";
 import { SourceUploadZone } from "@/components/sources/source-upload-zone";
@@ -86,7 +86,7 @@ export function SourcesPanel({
         if (response.ok) {
           const { source } = await response.json();
           setSources((prev) => [source, ...prev]);
-          progress[staged.id] = "done";
+          progress[staged.id] = source.status === "failed" ? "failed" : "done";
         } else {
           progress[staged.id] = "failed";
         }
@@ -169,7 +169,7 @@ export function SourcesPanel({
                         {typeLabel(source.type)}
                       </span>
                       <span>·</span>
-                      <span>{new Date(source.created_at).toLocaleDateString()}</span>
+                      <span>{formatDate(source.created_at)}</span>
                     </div>
                     {source.summary && (
                       <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{source.summary}</p>

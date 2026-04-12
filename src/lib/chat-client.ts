@@ -51,6 +51,18 @@ export async function renameProjectConversation(conversationId: string, title: s
   return (await response.json()) as CreatedConversation;
 }
 
+export async function triggerConversationMemory(
+  projectId: string,
+  conversationId: string,
+  conversationTitle: string,
+) {
+  fetch(`/api/projects/${projectId}/memory`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ conversationId, conversationTitle }),
+  }).catch(() => {});
+}
+
 export async function deleteProjectConversation(conversationId: string) {
   const response = await fetch(`/api/chat/conversations/${conversationId}`, {
     method: "DELETE",

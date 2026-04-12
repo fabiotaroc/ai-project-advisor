@@ -21,6 +21,7 @@ import {
   createProjectConversation,
   deleteProjectConversation,
   renameProjectConversation,
+  triggerConversationMemory,
 } from "@/lib/chat-client";
 import {
   AlertDialog,
@@ -110,6 +111,14 @@ export function ProjectSidebar({
     setIsCreatingConversation(true);
 
     try {
+      const outgoing = activeConversationId
+        ? conversationItems.find((c) => c.id === activeConversationId)
+        : conversationItems[0];
+
+      if (outgoing) {
+        triggerConversationMemory(projectId, outgoing.id, outgoing.title);
+      }
+
       const conversation = await createProjectConversation(projectId);
       router.push(`/project/${projectId}/chat?c=${conversation.id}`);
       router.refresh();

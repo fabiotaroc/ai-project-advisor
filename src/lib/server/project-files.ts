@@ -1,5 +1,12 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
+function getDefaultFileVisibility(path: string): "surfaced" | "internal" {
+  if (path === "index.md") return "internal";
+  if (path.startsWith("memory-")) return "internal";
+  if (/^memory-\d{4}-\d{2}-\d{2}\.md$/.test(path)) return "internal";
+  return "surfaced";
+}
+
 export async function editProjectFile({
   projectId,
   path,
@@ -56,6 +63,7 @@ export async function editProjectFile({
       project_id: projectId,
       path,
       content,
+      visibility: getDefaultFileVisibility(path),
       updated_by: userId,
       created_by_agent: createdByAgent,
     })

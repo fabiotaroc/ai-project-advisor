@@ -9,15 +9,17 @@ import {
 } from "@/lib/server/chat-history";
 import { assembleProjectSystemPrompt } from "@/lib/server/chat-context";
 import { editProjectFile } from "@/lib/server/project-files";
+import { generateConversationMemory } from "@/lib/server/memory";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+const MEMORY_TOKEN_THRESHOLD = 800_000;
 
 export const maxDuration = 60;
 
 const schema = z.object({
   projectId: z.string().uuid(),
   conversationId: z.string().uuid().optional(),
-  showReasoning: z.boolean().optional(),
   messages: z.array(z.custom<UIMessage>()),
 });
 
@@ -40,7 +42,6 @@ export async function POST(request: Request) {
   const userSupabase = await createSupabaseServerClient();
   const system = await assembleProjectSystemPrompt(projectId, user.id);
   const conversation = await getOrCreateProjectConversation(projectId, user.id, body.conversationId, body.messages);
-  const showReasoning = body.showReasoning ?? false;
 
   const modelMessages = await convertToModelMessages(body.messages);
 
@@ -49,13 +50,12 @@ export async function POST(request: Request) {
     system,
     messages: modelMessages,
     abortSignal: request.signal,
-    providerOptions: showReasoning
-      ? {
-          openai: {
-            reasoningSummary: "auto",
-          } satisfies OpenAILanguageModelResponsesOptions,
-        }
-      : undefined,
+    providerOptions: {
+      openai: {
+        reasoningEffort: "medium",
+        reasoningSummary: "auto",
+      } satisfies OpenAILanguageModelResponsesOptions,
+    },
     tools: {
       list_files: tool({
         description: "List all project files with display metadata",
@@ -202,12 +202,33 @@ export async function POST(request: Request) {
         },
       }),
     },
+    onFinish: async ({ totalUsage }) => {
+      if ((totalUsage.totalTokens ?? 0) < MEMORY_TOKEN_THRESHOLD) return;
+
+      try {
+        const allMessages = body.messages.map((m) => ({
+          role: m.role,
+          content: m.parts
+            .flatMap((p) => (p.type === "text" && p.text ? [p.text] : []))
+            .join("\n\n"),
+        }));
+
+        await generateConversationMemory({
+          projectId,
+          userId: user.id,
+          conversationTitle: conversation.title,
+          messages: allMessages,
+        });
+      } catch (err) {
+        console.error("Auto memory generation failed", err);
+      }
+    },
   });
 
   return result.toUIMessageStreamResponse({
     originalMessages: body.messages,
     consumeSseStream: consumeStream,
-    sendReasoning: showReasoning,
+    sendReasoning: true,
     onFinish: async ({ messages, isAborted }) => {
       if (isAborted) {
         return;

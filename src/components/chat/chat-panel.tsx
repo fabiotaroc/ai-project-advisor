@@ -445,9 +445,9 @@ export function ChatPanel({
     () =>
       new DefaultChatTransport({
         api: "/api/chat",
-        body: { projectId, conversationId: chatId, showReasoning },
+        body: { projectId, conversationId: chatId },
       }),
-    [chatId, projectId, showReasoning]
+    [chatId, projectId]
   );
 
   const { messages, sendMessage, status, error } = useChat({

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Bot, Lock, Pin, ShieldCheck, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatDate } from "@/lib/date-format";
 import type { ProjectFile } from "@/lib/types";
 
 function extractPreview(content: string, maxLines = 6): string {
@@ -89,7 +90,7 @@ export function OverviewPanel({
                       </span>
                     )}
                     <span>·</span>
-                    <span>{new Date(file.updated_at).toLocaleDateString()}</span>
+                    <span>{formatDate(file.updated_at)}</span>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -133,7 +134,7 @@ export function OverviewPanel({
                         {friendlyName(file.path)}
                       </p>
                       <span className="shrink-0 text-[10px] text-muted-foreground">
-                        {new Date(file.updated_at).toLocaleDateString()}
+                        {formatDate(file.updated_at)}
                       </span>
                     </div>
                     <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">

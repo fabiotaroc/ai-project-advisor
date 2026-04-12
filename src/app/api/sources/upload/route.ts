@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ source: completed });
   } catch (error) {
     console.error("Upload processing failed:", error);
+    await admin.from("source_materials").update({ status: "failed" }).eq("id", source.id);
     const { data: failed } = await admin
       .from("source_materials")
       .select("*")

@@ -4,6 +4,7 @@ import { embed, generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { editProjectFile } from "@/lib/server/project-files";
+import { appendMemoryEntry } from "@/lib/server/memory";
 
 const CHUNK_SIZE = 1200;
 const CHUNK_OVERLAP = 200;
@@ -16,10 +17,16 @@ export async function extractText(
 
   switch (ext) {
     case ".pdf": {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
-      const result = await pdfParse(buffer);
-      return result.text;
+      const { CanvasFactory } = await import("pdf-parse/worker");
+      const { PDFParse } = await import("pdf-parse");
+      const parser = new PDFParse({ data: new Uint8Array(buffer), CanvasFactory });
+
+      try {
+        const result = await parser.getText();
+        return result.text;
+      } finally {
+        await parser.destroy();
+      }
     }
     case ".docx": {
       const mammoth = await import("mammoth");
@@ -251,34 +258,13 @@ async function runWikiSynthesis({
   }
 
   if (synthesis.memory_entry) {
-    const memoryPath = `memory/${today}.md`;
-    const { data: existing } = await admin
-      .from("project_files")
-      .select("id,content")
-      .eq("project_id", projectId)
-      .eq("path", memoryPath)
-      .maybeSingle();
-
-    const header = `# Session Notes — ${today}\n\n`;
-    const entry = `## Ingested: ${title}\n${synthesis.memory_entry}\n\n`;
-
-    if (existing) {
-      await editProjectFile({
-        projectId,
-        path: memoryPath,
-        content: existing.content + entry,
-        userId,
-        createdByAgent: true,
-      });
-    } else {
-      await editProjectFile({
-        projectId,
-        path: memoryPath,
-        content: header + entry,
-        userId,
-        createdByAgent: true,
-      });
-    }
+    await appendMemoryEntry({
+      projectId,
+      userId,
+      heading: `Ingested: ${title}`,
+      body: synthesis.memory_entry,
+      date: today,
+    });
   }
 
   if (synthesis.index_entry) {

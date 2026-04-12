@@ -25,6 +25,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { formatDateTime } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import type { ProjectFile } from "@/lib/types";
 
@@ -299,7 +300,7 @@ export function WikiPanel({
               <CardTitle className="font-mono text-xs font-medium">{selectedPath}</CardTitle>
               {selected ? (
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Updated {new Date(selected.updated_at).toLocaleString()}
+                  Updated {formatDateTime(selected.updated_at)}
                 </p>
               ) : null}
             </div>
@@ -313,8 +314,8 @@ export function WikiPanel({
             </div>
           ) : null}
         </CardHeader>
-        <CardContent className="flex flex-1 px-0 py-0">
-          <div className="flex w-full flex-1">
+        <CardContent className="flex min-h-0 flex-1 overflow-hidden px-0 py-0">
+          <div className="flex min-h-0 w-full flex-1 overflow-hidden">
             <Label htmlFor="file-content" className="sr-only">
               File content
             </Label>
@@ -323,11 +324,11 @@ export function WikiPanel({
               value={content}
               onChange={(event) => setContent(event.target.value)}
               disabled={selected?.locked}
-              className="h-full min-h-0 flex-1 resize-none rounded-none border-0 bg-transparent p-4 font-mono text-sm leading-relaxed shadow-none focus-visible:ring-0"
+              className="field-sizing-fixed h-full min-h-0 flex-1 overflow-y-auto rounded-none border-0 bg-transparent p-4 font-mono text-sm leading-relaxed shadow-none focus-visible:ring-0"
             />
           </div>
         </CardContent>
-        <CardFooter className="justify-end gap-2 px-4 py-2.5">
+        <CardFooter className="shrink-0 justify-end gap-2 px-4 py-2.5">
           {selected?.locked && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <Lock className="size-3" />
