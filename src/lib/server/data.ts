@@ -7,6 +7,7 @@ import type {
   ActivityEvent,
   ProjectFile,
   ProjectRole,
+  ProjectSettings,
   SourceMaterial,
 } from "@/lib/types";
 
@@ -176,6 +177,20 @@ export async function getSources(projectId: string) {
 
   if (error) throw error;
   return (data ?? []) as SourceMaterial[];
+}
+
+export async function getProjectSettings(projectId: string): Promise<ProjectSettings | null> {
+  await getProjectForUser(projectId);
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("project_settings")
+    .select("*")
+    .eq("project_id", projectId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as ProjectSettings | null;
 }
 
 export async function getActivity(projectId: string) {

@@ -44,6 +44,7 @@ This separation matters for user trust. Users configure settings, the agent main
 These are things the agent genuinely cannot know or infer — only the user can provide them.
 
 **Interaction style**
+
 - Tone of voice — formal (client-facing) vs. internal/conversational
 - Output verbosity — concise summaries vs. detailed breakdowns
 - Default format — prose, bullets, tables, structured sections
@@ -51,18 +52,21 @@ These are things the agent genuinely cannot know or infer — only the user can 
 - Language / locale
 
 **Project identity and relationships**
+
 - Who is the client, who is the team — "Samsung is our client, we are the agency" cannot be inferred from a transcript where both sides are talking
 - Organizational hierarchy — who approves decisions, who is a stakeholder vs. a decision-maker
 - Sensitive topics — people to treat carefully, competitors never to name in outputs, politically loaded subjects
 - Source trust levels — a signed-off brief carries more weight than a casual Slack message
 
 **Terminology (glossary)**
+
 - Project-specific shorthand and jargon — what "WBS", "the hub", "validation" mean on this specific project
 - Branded terminology — always say "the engagement" not "the project", say "deliverable" not "output"
 - What counts as a decision vs. a discussion point
 - What counts as a blocker vs. a risk
 
 **Agent permissions**
+
 - Auto-write vs. propose — should the agent update `decisions.md` automatically after ingesting a meeting, or surface a proposal for review first?
 - Entity page creation — should the agent silently create `stakeholders/samsung-design-team.md`, or ask?
 - Locked files — files the agent can read but never edit
@@ -215,7 +219,7 @@ Default files (`index.md`, `glossary.md`, `PROJECT.md`, `WORK.md`, `PRODUCT.md`,
 
 - **Pinned** — shown prominently in the project overview. The most important artifacts: glossary, project brief, decisions, current workboard.
 - **Source of truth** — visually marked as authoritative. The agent treats edits to these files as high-stakes and may prompt for confirmation before overwriting content.
-- **Visibility** — `surfaced` (appears in the main file list) or `internal` (accessible but hidden from the default view). Files like `index.md` and `memory/*` are internal — they are the agent's working infrastructure, not the user's primary reading surface.
+- **Visibility** — `surfaced` (appears in the main file list) or `internal` (accessible but hidden from the default view). Files like `index.md` and `memory/`* are internal — they are the agent's working infrastructure, not the user's primary reading surface.
 - **Locked** — the agent can read but cannot edit. The user owns this file entirely.
 
 **Agent-created vs. user-created files.** The `created_by_agent` flag tracks origin. The UI uses this alongside visibility to present a curated view rather than a flat file list.
@@ -229,7 +233,7 @@ Default files (`index.md`, `glossary.md`, `PROJECT.md`, `WORK.md`, `PRODUCT.md`,
 - Private `sources` bucket
 - Private `exports` bucket
 - `sources/{project_id}/{source_material_id}/original.`* — raw uploaded file
-- `sources/{project_id}/{source_material_id}/attachments/*` — extracted attachments
+- `sources/{project_id}/{source_material_id}/attachments/`* — extracted attachments
 - `exports/{project_id}/*` — generated exports
 
 ### Supabase Vector Search
@@ -292,8 +296,9 @@ Pinned files appear as cards in the project overview. Internal files (index, mem
 **Project overview** — dashboard of pinned artifacts rendered as cards. Shows `PROJECT.md`, `WORK.md`, `PRODUCT.md`, `decisions.md`, and `glossary.md` by default. Each card shows a summary or preview. Users can pin/unpin files from this view. Files marked as source of truth show a visual indicator.
 
 **Wiki** — two tiers:
+
 - **Surfaced artifacts** (default view) — only files with `visibility = surfaced`. Presented as a clean list of project artifacts with last-updated timestamps and authorship (agent vs. user).
-- **All files** (toggle or tab) — includes internal files like `index.md`, `memory/*`, cross-reference plumbing. For advanced users who want to see the full wiki.
+- **All files** (toggle or tab) — includes internal files like `index.md`, `memory/`*, cross-reference plumbing. For advanced users who want to see the full wiki.
 
 Agent-created files show a subtle visual distinction (e.g. a small icon or label) so the user understands which artifacts they wrote and which the agent synthesized. Locked files show a lock indicator. Source-of-truth files show an authority badge.
 
@@ -411,18 +416,21 @@ This synthesis pass is not optional — it is the primary output of ingestion al
 ## Open Technical Questions
 
 **Architecture**
+
 - How large can the assembled system prompt get before we need smarter context selection? `index.md` and the glossary are always loaded; the ceiling will depend on project size.
 - What is the right chunking strategy for mixed-format project materials?
 - How do we handle concurrent file edits from multiple users plus the agent?
 - How do we handle `index.md` consistency? The agent maintains it, but if it drifts out of sync with `project_files`, context assembly degrades. Should the backend validate it on each request?
 
 **Agent behavior**
+
 - When should we introduce a review step for agent writes? (intentionally deferred from v1)
 - What triggers a wiki lint pass — scheduled (e.g. weekly), user-requested, or agent-initiated after a threshold of new ingestions?
 - When should the agent proactively suggest filing a chat answer as a project file, versus always doing it silently, versus never doing it without explicit user request?
 - At what point does the wiki synthesis pass during ingestion require a user-facing preview before writing? Automatic writes may be fine for additive changes; contradictions or overwrites to existing content probably need review.
 
 **UX and settings**
+
 - Should new projects come with a fixed set of default files, or let the user pick a template?
 - What is the right default for agent permissions? Fully automatic synthesis is more useful but may feel surprising to new users. A guided onboarding that explains what the agent will do could mitigate this.
 - How should the glossary table UI handle conflicts? The agent adds a term during ingestion while the user is editing the same glossary in the table view.
@@ -449,7 +457,7 @@ Current state: auth, project portfolio, chat with streaming + 5 agent tools, fil
 - [x] Load `glossary.md` content into the system prompt on every turn
 - [x] Load `index.md` content into the system prompt instead of the raw file path list
 - [x] Serialize `project_settings` fields (tone, verbosity, proactivity, etc.) into prompt instructions
-- [ ] Include project context fields (client name, team name, etc.) from settings in the prompt
+- [x] Include project context fields (client name, team name, etc.) from settings in the prompt
 
 ### Backend — Agent Tools
 
@@ -461,18 +469,18 @@ Current state: auth, project portfolio, chat with streaming + 5 agent tools, fil
 
 ### Backend — Ingestion Pipeline
 
-- [ ] Wire source upload flow end-to-end: UI → signed URL → Storage upload → `source_materials` row → processing job
-- [ ] Implement text extraction: PDF (e.g. `pdf-parse`), DOCX (e.g. `mammoth`), `.eml` (header parsing, HTML body cleaning, attachment extraction), Markdown/plain text (direct)
-- [ ] Implement chunking (fixed-size with overlap or semantic)
-- [ ] Implement embedding generation (OpenAI `text-embedding-3-small`) and store in `source_chunks.embedding`
-- [ ] Implement LLM summary generation per source
-- [ ] Implement wiki synthesis pass after chunking/embedding:
-  - [ ] Write or update entity pages for people/teams/topics mentioned
-  - [ ] Append extracted decisions to `decisions.md`
-  - [ ] Flag contradictions with existing project files (store as notes in memory or surface to user)
-  - [ ] Update `index.md` with new/changed pages
-  - [ ] Write memory entry (`memory/{date}.md`) recording what was ingested and what changed
-- [ ] Update `source_materials.status` through lifecycle: `processing` → `ready` / `failed`
+- [x] Wire source upload flow end-to-end: UI → signed URL → Storage upload → `source_materials` row → processing job
+- [x] Implement text extraction: PDF (e.g. `pdf-parse`), DOCX (e.g. `mammoth`), `.eml` (header parsing, HTML body cleaning, attachment extraction), Markdown/plain text (direct)
+- [x] Implement chunking (fixed-size with overlap or semantic)
+- [x] Implement embedding generation (OpenAI `text-embedding-3-small`) and store in `source_chunks.embedding`
+- [x] Implement LLM summary generation per source
+- [x] Implement wiki synthesis pass after chunking/embedding:
+  - [x] Write or update entity pages for people/teams/topics mentioned
+  - [x] Append extracted decisions to `decisions.md`
+  - [x] Flag contradictions with existing project files (store as notes in memory or surface to user)
+  - [x] Update `index.md` with new/changed pages
+  - [x] Write memory entry (`memory/{date}.md`) recording what was ingested and what changed
+- [x] Update `source_materials.status` through lifecycle: `processing` → `ready` / `failed`
 
 ### Backend — Default Files
 
@@ -481,65 +489,65 @@ Current state: auth, project portfolio, chat with streaming + 5 agent tools, fil
 
 ### Backend — Wiki Lint
 
-- [ ] Implement wiki lint as a callable workflow (not a separate tool — the agent uses `list_files`, `read_file`, `edit_file`):
-  - [ ] Detect stale content (outdated dates, deadlines, statuses)
-  - [ ] Detect contradictions across files
-  - [ ] Detect orphan pages (no inbound references)
-  - [ ] Detect missing entity pages (frequently mentioned but no dedicated page)
-  - [ ] Detect `index.md` gaps
-- [ ] Decide trigger mechanism: user-invoked chat command, scheduled, or agent-suggested after N ingestions
+- [x] Implement wiki lint as a callable workflow (not a separate tool — the agent uses `list_files`, `read_file`, `edit_file`):
+  - [x] Detect stale content (outdated dates, deadlines, statuses)
+  - [x] Detect contradictions across files
+  - [x] Detect orphan pages (no inbound references)
+  - [x] Detect missing entity pages (frequently mentioned but no dedicated page)
+  - [x] Detect `index.md` gaps
+- [x] Decide trigger mechanism: user-invoked chat command, scheduled, or agent-suggested after N ingestions
 
 ### Backend — Search
 
-- [ ] Add vector search path to `/api/search` using embeddings + `match_source_chunks`
-- [ ] Merge FTS results (project files) with vector results (source chunks) in unified response
+- [x] Add vector search path to `/api/search` using embeddings + `match_source_chunks`
+- [x] Merge FTS results (project files) with vector results (source chunks) in unified response
 
 ### Frontend — Project Settings
 
-- [ ] Create `/project/[projectId]/settings` route
-- [ ] Build settings form with four sections:
-  - [ ] Interaction style: tone, verbosity, default format, proactivity, language (dropdowns/toggles)
-  - [ ] Project context: client name, team name, project phase, key roles (structured fields)
-  - [ ] Agent permissions: auto-synthesize on ingest, auto-create entity pages, locked file controls (toggles)
-  - [ ] Output templates: recurring deliverable formats, client vs. internal tone (text fields)
-- [ ] Add "Settings" entry to sidebar navigation
-- [ ] Wire form saves to `project_settings` table via new API route (`/api/projects/[projectId]/settings`)
+- [x] Create `/project/[projectId]/settings` route
+- [x] Build settings form with four sections:
+  - [x] Interaction style: tone, verbosity, default format, proactivity, language (dropdowns/toggles)
+  - [x] Project context: client name, team name, project phase, key roles (structured fields)
+  - [x] Agent permissions: auto-synthesize on ingest, auto-create entity pages, locked file controls (toggles)
+  - [x] Output templates: recurring deliverable formats, client vs. internal tone (text fields)
+- [x] Add "Settings" entry to sidebar navigation
+- [x] Wire form saves to `project_settings` table via new API route (`/api/projects/[projectId]/settings`)
 
 ### Frontend — Wiki / Files Overhaul
 
-- [ ] Rename sidebar entry from "Files" to "Wiki"
-- [ ] Implement two-tier view: "Surfaced artifacts" (default, `visibility = surfaced`) and "All files" (toggle/tab, includes internal)
-- [ ] Add visual indicators on file cards: pinned badge, source-of-truth badge, locked icon, agent-created icon
-- [ ] Add per-file controls: pin/unpin, set visibility, lock/unlock, mark as source of truth
-- [ ] Build project overview route (`/project/[projectId]/overview` or make it the default): dashboard of pinned artifact cards with summaries
+- [x] Rename sidebar entry from "Files" to "Wiki"
+- [x] Implement two-tier view: "Surfaced artifacts" (default, `visibility = surfaced`) and "All files" (toggle/tab, includes internal)
+- [x] Add visual indicators on file cards: pinned badge, source-of-truth badge, locked icon, agent-created icon
+- [x] Add per-file controls: pin/unpin, set visibility, lock/unlock, mark as source of truth
+- [x] Build project overview route (`/project/[projectId]/overview` or make it the default): dashboard of pinned artifact cards with summaries
 
 ### Frontend — Glossary
 
-- [ ] Build glossary table view component: term column + definition column, editable inline
-- [ ] Wire reads and saves to `glossary.md` via `/api/files` (parse markdown table ↔ structured table rows)
-- [ ] Add "Glossary" as a prominent entry in sidebar or as a pinned card in project overview
-- [ ] Ensure glossary is reachable in two clicks from any project view
+- [x] Build glossary table view component: term column + definition column, editable inline
+- [x] Wire reads and saves to `glossary.md` via `/api/files` (parse markdown table ↔ structured table rows)
+- [x] Add "Glossary" as a prominent entry in sidebar or as a pinned card in project overview
+- [x] Ensure glossary is reachable in two clicks from any project view
 
 ### Frontend — Sources Upload
 
-- [ ] Wire `SourceUploadZone` to actually submit files: signed URL → Storage upload → `POST /api/sources`
-- [ ] Show processing status per source (processing → ready → failed)
-- [ ] Show source summary and metadata once ingestion completes
+- [x] Wire `SourceUploadZone` to actually submit files: signed URL → Storage upload → `POST /api/sources`
+- [x] Show processing status per source (processing → ready → failed)
+- [x] Show source summary and metadata once ingestion completes
 
 ### Frontend — Chat Improvements
 
-- [ ] Show inline notifications when the agent creates or edits wiki files during chat (currently partially implemented)
-- [ ] When the agent files a chat synthesis as a new wiki page, show a link to the new artifact in the chat
-- [ ] Multi-conversation support: conversation list in sidebar, ability to start new conversations
+- [x] Show inline notifications when the agent creates or edits wiki files during chat (currently partially implemented)
+- [x] When the agent files a chat synthesis as a new wiki page, show a link to the new artifact in the chat
+- [x] Multi-conversation support: conversation list in sidebar, ability to start new conversations
 
 ### Frontend — Types
 
 - [x] Add `ProjectSettings` type to `types.ts`
 - [x] Extend `ProjectFile` type with `created_by_agent`, `pinned`, `visibility`, `locked`, `is_source_of_truth`
-- [ ] Add `GlossaryEntry` type (`term`, `definition`)
+- [x] Add `GlossaryEntry` type (`term`, `definition`)
 
 ### Infrastructure
 
-- [ ] Wire `src/proxy.ts` into a root `middleware.ts` — session refresh and route protection currently only works via server-side `getSessionUser()` calls, not Edge middleware
-- [ ] Generate TypeScript types from Supabase schema (use `supabase gen types` or the MCP `generate_typescript_types` tool) to replace hand-written types
+- [x] Wire `src/proxy.ts` into a root `middleware.ts` — session refresh and route protection currently only works via server-side `getSessionUser()` calls, not Edge middleware
+- [x] Generate TypeScript types from Supabase schema (use `supabase gen types` or the MCP `generate_typescript_types` tool) to replace hand-written types
 

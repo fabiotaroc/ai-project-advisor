@@ -13,6 +13,8 @@ export type StagedFile = {
 
 const ACCEPTED_EXTENSIONS = new Set([
   ".eml",
+  ".pdf",
+  ".docx",
   ".pptx",
   ".xlsx",
   ".txt",
@@ -23,6 +25,8 @@ const ACCEPTED_EXTENSIONS = new Set([
 
 const ACCEPTED_MIME_TYPES = new Set([
   "message/rfc822",
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "text/plain",
@@ -43,6 +47,8 @@ export function isAcceptedFile(file: File): boolean {
 export function buildAcceptString(): string {
   return [
     ".eml",
+    ".pdf",
+    ".docx",
     ".pptx",
     ".xlsx",
     ".txt",
@@ -63,7 +69,7 @@ export async function classifyFile(file: File): Promise<Pick<StagedFile, "catego
     return { category: "email", categoryConfidence: "high" };
   }
 
-  if (ext === ".pptx" || ext === ".xlsx") {
+  if (ext === ".pdf" || ext === ".docx" || ext === ".pptx" || ext === ".xlsx") {
     return { category: "document", categoryConfidence: "high" };
   }
 

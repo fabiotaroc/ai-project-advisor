@@ -1,8 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { Mail, Presentation, FileSpreadsheet, FileText, MessageSquareText } from "lucide-react";
+import { useCallback, useState } from "react";
+import {
+  Loader2,
+  Mail,
+  Presentation,
+  FileSpreadsheet,
+  FileText,
+  MessageSquareText,
+  Upload,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { SourceMaterial } from "@/lib/types";
@@ -24,7 +33,7 @@ function statusBadge(status: SourceMaterial["status"]) {
     case "ready":
       return <Badge variant="secondary" className="text-[10px]">Ready</Badge>;
     case "processing":
-      return <Badge variant="outline" className="text-[10px]">Processing</Badge>;
+      return <Badge variant="outline" className="animate-pulse text-[10px]">Processing…</Badge>;
     case "failed":
       return <Badge variant="destructive" className="text-[10px]">Failed</Badge>;
   }
@@ -39,21 +48,105 @@ function typeLabel(type: SourceMaterial["type"]): string {
   }
 }
 
-export function SourcesPanel({ sources }: { sources: SourceMaterial[] }) {
+export function SourcesPanel({
+  projectId,
+  sources: initialSources,
+}: {
+  projectId: string;
+  sources: SourceMaterial[];
+}) {
+  const [sources, setSources] = useState(initialSources);
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, "pending" | "uploading" | "done" | "failed">>({});
+
+  const uploadAll = useCallback(async () => {
+    if (stagedFiles.length === 0 || isUploading) return;
+    setIsUploading(true);
+
+    const progress: Record<string, "pending" | "uploading" | "done" | "failed"> = {};
+    stagedFiles.forEach((f) => { progress[f.id] = "pending"; });
+    setUploadProgress({ ...progress });
+
+    for (const staged of stagedFiles) {
+      progress[staged.id] = "uploading";
+      setUploadProgress({ ...progress });
+
+      try {
+        const formData = new FormData();
+        formData.append("file", staged.file);
+        formData.append("projectId", projectId);
+        formData.append("category", staged.category);
+
+        const response = await fetch("/api/sources/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (response.ok) {
+          const { source } = await response.json();
+          setSources((prev) => [source, ...prev]);
+          progress[staged.id] = "done";
+        } else {
+          progress[staged.id] = "failed";
+        }
+      } catch {
+        progress[staged.id] = "failed";
+      }
+
+      setUploadProgress({ ...progress });
+    }
+
+    const failedIds = new Set(
+      Object.entries(progress)
+        .filter(([, status]) => status === "failed")
+        .map(([id]) => id),
+    );
+
+    setStagedFiles((prev) => prev.filter((f) => failedIds.has(f.id)));
+    setIsUploading(false);
+    setUploadProgress({});
+  }, [stagedFiles, isUploading, projectId]);
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold tracking-tight">Sources</h1>
         {stagedFiles.length > 0 && (
-          <span className="text-xs text-muted-foreground">
-            {stagedFiles.length} file{stagedFiles.length !== 1 ? "s" : ""} staged for upload
-          </span>
+          <Button onClick={uploadAll} disabled={isUploading}>
+            {isUploading ? (
+              <Loader2 data-icon="inline-start" className="animate-spin" />
+            ) : (
+              <Upload data-icon="inline-start" />
+            )}
+            {isUploading
+              ? "Uploading…"
+              : `Upload ${stagedFiles.length} file${stagedFiles.length !== 1 ? "s" : ""}`}
+          </Button>
         )}
       </div>
 
       <SourceUploadZone onFilesStaged={setStagedFiles} />
+
+      {Object.keys(uploadProgress).length > 0 && (
+        <div className="flex flex-col gap-1">
+          {stagedFiles.map((f) => {
+            const status = uploadProgress[f.id];
+            return (
+              <div
+                key={f.id}
+                className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-sm"
+              >
+                {status === "uploading" && <Loader2 className="size-3.5 animate-spin text-primary" />}
+                {status === "done" && <span className="text-xs text-green-600">✓</span>}
+                {status === "failed" && <span className="text-xs text-destructive">✗</span>}
+                <span className="truncate">{f.name}</span>
+                <span className="ml-auto text-xs capitalize text-muted-foreground">{status}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {sources.length > 0 && (
         <div className="flex flex-col gap-3">

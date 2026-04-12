@@ -1,0 +1,87 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getOptionalSessionUser } from "@/lib/server/auth";
+import { getProjectAccessForUser } from "@/lib/server/data";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { extractText, ingestSourceMaterial } from "@/lib/server/ingestion";
+
+export const maxDuration = 120;
+
+export async function POST(request: NextRequest) {
+  const user = await getOptionalSessionUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const formData = await request.formData();
+  const file = formData.get("file") as File | null;
+  const projectId = formData.get("projectId") as string | null;
+  const category = formData.get("category") as string | null;
+
+  if (!file || !projectId || !category) {
+    return NextResponse.json({ error: "Missing file, projectId, or category" }, { status: 400 });
+  }
+
+  const access = await getProjectAccessForUser(user.id, projectId);
+  if (!access || access.role === "viewer") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const admin = createSupabaseAdminClient();
+
+  const { data: source, error: sourceError } = await admin
+    .from("source_materials")
+    .insert({
+      project_id: projectId,
+      type: category,
+      title: file.name,
+      status: "processing",
+      uploaded_by: user.id,
+      metadata: { originalSize: file.size, mimeType: file.type },
+    })
+    .select("id")
+    .single();
+
+  if (sourceError) {
+    return NextResponse.json({ error: sourceError.message }, { status: 500 });
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const storagePath = `${projectId}/${source.id}/original${file.name.slice(file.name.lastIndexOf("."))}`;
+  await admin.storage.from("sources").upload(storagePath, buffer, {
+    contentType: file.type || "application/octet-stream",
+    upsert: false,
+  });
+
+  await admin
+    .from("source_materials")
+    .update({ raw_storage_path: storagePath })
+    .eq("id", source.id);
+
+  try {
+    const text = await extractText(buffer, file.name);
+
+    await ingestSourceMaterial({
+      sourceId: source.id,
+      projectId,
+      userId: user.id,
+      text,
+      title: file.name,
+    });
+
+    const { data: completed } = await admin
+      .from("source_materials")
+      .select("*")
+      .eq("id", source.id)
+      .single();
+
+    return NextResponse.json({ source: completed });
+  } catch (error) {
+    console.error("Upload processing failed:", error);
+    const { data: failed } = await admin
+      .from("source_materials")
+      .select("*")
+      .eq("id", source.id)
+      .single();
+
+    return NextResponse.json({ source: failed }, { status: 200 });
+  }
+}

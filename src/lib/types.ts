@@ -22,6 +22,10 @@ export type ProjectSettings = {
   language: string;
   auto_synthesize_on_ingest: boolean;
   auto_create_entity_pages: boolean;
+  client_name?: string;
+  team_name?: string;
+  project_phase?: string;
+  additional_context?: string;
   created_at: string;
   updated_at: string;
 };
@@ -56,6 +60,11 @@ export type AccessibleProject = {
 };
 
 export type ProjectInviteRole = Exclude<ProjectRole, "owner">;
+
+export type GlossaryEntry = {
+  term: string;
+  definition: string;
+};
 
 export type ProjectInvite = {
   id: string;

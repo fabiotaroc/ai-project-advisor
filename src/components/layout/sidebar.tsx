@@ -6,12 +6,15 @@ import { useSelectedLayoutSegment } from "next/navigation";
 import {
   Activity,
   BookOpen,
-  Files,
+  BookText,
   FolderOpen,
+  LayoutDashboard,
   Loader2,
+  Library,
   Mail,
   MessageSquare,
   Search,
+  Settings,
   Shield,
   UserPlus,
 } from "lucide-react";
@@ -22,11 +25,14 @@ import { cn } from "@/lib/utils";
 import type { ProjectInvite, ProjectRole } from "@/lib/types";
 
 const projectLinks = [
-  { key: "files", label: "Files", icon: Files },
+  { key: "overview", label: "Overview", icon: LayoutDashboard },
+  { key: "files", label: "Wiki", icon: Library },
+  { key: "glossary", label: "Glossary", icon: BookText },
   { key: "sources", label: "Sources", icon: BookOpen },
   { key: "search", label: "Search", icon: Search },
   { key: "activity", label: "Activity", icon: Activity },
- ] as const;
+  { key: "settings", label: "Settings", icon: Settings },
+] as const;
 
 const chatLinks = [{ key: "chat", label: "Chat", icon: MessageSquare }] as const;
 

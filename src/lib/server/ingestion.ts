@@ -1,0 +1,303 @@
+import "server-only";
+
+import { embed, generateText } from "ai";
+import { openai } from "@ai-sdk/openai";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { editProjectFile } from "@/lib/server/project-files";
+
+const CHUNK_SIZE = 1200;
+const CHUNK_OVERLAP = 200;
+
+export async function extractText(
+  buffer: Buffer,
+  fileName: string,
+): Promise<string> {
+  const ext = fileName.slice(fileName.lastIndexOf(".")).toLowerCase();
+
+  switch (ext) {
+    case ".pdf": {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
+      const result = await pdfParse(buffer);
+      return result.text;
+    }
+    case ".docx": {
+      const mammoth = await import("mammoth");
+      const result = await mammoth.extractRawText({ buffer });
+      return result.value;
+    }
+    case ".eml": {
+      const raw = buffer.toString("utf-8");
+      const bodyStart = raw.indexOf("\n\n");
+      if (bodyStart === -1) return raw;
+      const headers = raw.slice(0, bodyStart);
+      let body = raw.slice(bodyStart + 2);
+      body = body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      const subject = headers.match(/^Subject:\s*(.+)$/im)?.[1] ?? "";
+      const from = headers.match(/^From:\s*(.+)$/im)?.[1] ?? "";
+      const to = headers.match(/^To:\s*(.+)$/im)?.[1] ?? "";
+      const date = headers.match(/^Date:\s*(.+)$/im)?.[1] ?? "";
+      return [
+        subject && `Subject: ${subject}`,
+        from && `From: ${from}`,
+        to && `To: ${to}`,
+        date && `Date: ${date}`,
+        "",
+        body,
+      ]
+        .filter(Boolean)
+        .join("\n");
+    }
+    case ".md":
+    case ".txt":
+    case ".vtt":
+    case ".srt":
+      return buffer.toString("utf-8");
+    default:
+      return buffer.toString("utf-8");
+  }
+}
+
+export function chunkText(text: string): string[] {
+  const chunks: string[] = [];
+  let start = 0;
+
+  while (start < text.length) {
+    const end = Math.min(start + CHUNK_SIZE, text.length);
+    chunks.push(text.slice(start, end));
+    start += CHUNK_SIZE - CHUNK_OVERLAP;
+  }
+
+  return chunks.filter((c) => c.trim().length > 0);
+}
+
+export async function generateEmbeddings(chunks: string[]): Promise<number[][]> {
+  const results: number[][] = [];
+  const batchSize = 20;
+
+  for (let i = 0; i < chunks.length; i += batchSize) {
+    const batch = chunks.slice(i, i + batchSize);
+    const embeddings = await Promise.all(
+      batch.map(async (chunk) => {
+        const { embedding } = await embed({
+          model: openai.embedding("text-embedding-3-small"),
+          value: chunk,
+        });
+        return embedding;
+      }),
+    );
+    results.push(...embeddings);
+  }
+
+  return results;
+}
+
+export async function generateSourceSummary(
+  text: string,
+  title: string,
+): Promise<string> {
+  const snippet = text.slice(0, 6000);
+
+  const { text: summary } = await generateText({
+    model: openai("gpt-4.1-mini"),
+    system:
+      "You are a concise summarizer. Produce a 2-4 sentence summary of the document. Focus on the key facts, decisions, and action items.",
+    prompt: `Document title: ${title}\n\n${snippet}`,
+    maxOutputTokens: 300,
+  });
+
+  return summary;
+}
+
+export async function ingestSourceMaterial({
+  sourceId,
+  projectId,
+  userId,
+  text,
+  title,
+}: {
+  sourceId: string;
+  projectId: string;
+  userId: string;
+  text: string;
+  title: string;
+}) {
+  const admin = createSupabaseAdminClient();
+
+  try {
+    await admin
+      .from("source_materials")
+      .update({ status: "processing", parsed_content: text })
+      .eq("id", sourceId);
+
+    const [summary, chunks] = await Promise.all([
+      generateSourceSummary(text, title),
+      Promise.resolve(chunkText(text)),
+    ]);
+
+    const embeddings = await generateEmbeddings(chunks);
+
+    const chunkRows = chunks.map((content, index) => ({
+      source_material_id: sourceId,
+      content,
+      embedding: JSON.stringify(embeddings[index]),
+      chunk_index: index,
+      metadata: {},
+    }));
+
+    if (chunkRows.length > 0) {
+      const { error: chunkError } = await admin.from("source_chunks").insert(chunkRows);
+      if (chunkError) throw chunkError;
+    }
+
+    await admin
+      .from("source_materials")
+      .update({ status: "ready", summary })
+      .eq("id", sourceId);
+
+    await admin.from("activity_events").insert({
+      project_id: projectId,
+      event_type: "source_ingested",
+      summary: `Ingested "${title}" — ${chunks.length} chunks, summary generated`,
+      actor_id: userId,
+      target_type: "source_material",
+      target_id: sourceId,
+    });
+
+    await runWikiSynthesis({ projectId, userId, title, summary, text });
+  } catch (error) {
+    console.error("Ingestion failed for source", sourceId, error);
+    await admin.from("source_materials").update({ status: "failed" }).eq("id", sourceId);
+    throw error;
+  }
+}
+
+async function runWikiSynthesis({
+  projectId,
+  userId,
+  title,
+  summary,
+  text,
+}: {
+  projectId: string;
+  userId: string;
+  title: string;
+  summary: string;
+  text: string;
+}) {
+  const admin = createSupabaseAdminClient();
+
+  const { data: settings } = await admin
+    .from("project_settings")
+    .select("auto_synthesize_on_ingest")
+    .eq("project_id", projectId)
+    .maybeSingle();
+
+  if (!settings?.auto_synthesize_on_ingest) return;
+
+  const snippet = text.slice(0, 4000);
+  const today = new Date().toISOString().split("T")[0];
+
+  const { text: synthesisOutput } = await generateText({
+    model: openai("gpt-4.1-mini"),
+    system: [
+      "You are a project wiki synthesis agent. Given a newly ingested source document, produce structured output for the project wiki.",
+      "Return a JSON object with these optional fields:",
+      '- "decisions": array of decision strings extracted from the source (only if there are clear decisions)',
+      '- "memory_entry": a short paragraph summarizing what was ingested and what it contributes to the project',
+      '- "index_entry": a one-line summary of this source suitable for the wiki index',
+      "Return valid JSON only. Omit fields if not applicable.",
+    ].join("\n"),
+    prompt: `Source title: ${title}\nSummary: ${summary}\n\nContent excerpt:\n${snippet}`,
+    maxOutputTokens: 800,
+  });
+
+  let synthesis: {
+    decisions?: string[];
+    memory_entry?: string;
+    index_entry?: string;
+  } = {};
+
+  try {
+    synthesis = JSON.parse(synthesisOutput);
+  } catch {
+    return;
+  }
+
+  if (synthesis.decisions?.length) {
+    const { data: decisionsFile } = await admin
+      .from("project_files")
+      .select("id,content")
+      .eq("project_id", projectId)
+      .eq("path", "decisions.md")
+      .maybeSingle();
+
+    if (decisionsFile) {
+      const newDecisions = synthesis.decisions
+        .map((d) => `- ${d} _(from: ${title}, ${today})_`)
+        .join("\n");
+      const updatedContent = decisionsFile.content.replace(
+        "_No decisions recorded yet._\n",
+        "",
+      );
+      await editProjectFile({
+        projectId,
+        path: "decisions.md",
+        content: updatedContent.trimEnd() + "\n" + newDecisions + "\n",
+        userId,
+        createdByAgent: false,
+      });
+    }
+  }
+
+  if (synthesis.memory_entry) {
+    const memoryPath = `memory/${today}.md`;
+    const { data: existing } = await admin
+      .from("project_files")
+      .select("id,content")
+      .eq("project_id", projectId)
+      .eq("path", memoryPath)
+      .maybeSingle();
+
+    const header = `# Session Notes — ${today}\n\n`;
+    const entry = `## Ingested: ${title}\n${synthesis.memory_entry}\n\n`;
+
+    if (existing) {
+      await editProjectFile({
+        projectId,
+        path: memoryPath,
+        content: existing.content + entry,
+        userId,
+        createdByAgent: true,
+      });
+    } else {
+      await editProjectFile({
+        projectId,
+        path: memoryPath,
+        content: header + entry,
+        userId,
+        createdByAgent: true,
+      });
+    }
+  }
+
+  if (synthesis.index_entry) {
+    const { data: indexFile } = await admin
+      .from("project_files")
+      .select("id,content")
+      .eq("project_id", projectId)
+      .eq("path", "index.md")
+      .maybeSingle();
+
+    if (indexFile && !indexFile.content.includes(title)) {
+      await admin
+        .from("project_files")
+        .update({
+          content:
+            indexFile.content.trimEnd() +
+            `\n- Source: ${title} — ${synthesis.index_entry}\n`,
+        })
+        .eq("id", indexFile.id);
+    }
+  }
+}

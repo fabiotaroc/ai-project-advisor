@@ -22,8 +22,10 @@ import {
   Sparkles,
   Wrench,
 } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -109,19 +111,48 @@ function isToolPart(part: UIMessage["parts"][number]) {
   return part.type === "dynamic-tool" || part.type.startsWith("tool-");
 }
 
-function ToolCallBlock({
+type ToolPartInfo = {
+  type: string;
+  toolCallId?: string;
+  toolName?: string;
+  state?: string;
+  input?: Record<string, unknown>;
+  output?: unknown;
+  errorText?: string;
+};
+
+function FileEditNotification({
   part,
+  projectId,
 }: {
-  part: {
-    type: string;
-    toolCallId?: string;
-    toolName?: string;
-    state?: string;
-    input?: Record<string, unknown>;
-    output?: unknown;
-    errorText?: string;
-  };
+  part: ToolPartInfo;
+  projectId: string;
 }) {
+  const output = part.output as { path?: string; created?: boolean } | undefined;
+  if (!output?.path) return null;
+
+  const isNew = output.created;
+
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-muted/30 px-3 py-2">
+      <FilePenLine className="size-3.5 text-muted-foreground" />
+      <span className="text-xs text-muted-foreground">
+        {isNew ? "Created" : "Updated"}{" "}
+        <Link
+          href={`/project/${projectId}/files`}
+          className="font-medium text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
+        >
+          {output.path}
+        </Link>
+      </span>
+      {isNew && (
+        <Badge variant="secondary" className="text-[10px]">New</Badge>
+      )}
+    </div>
+  );
+}
+
+function ToolCallBlock({ part }: { part: ToolPartInfo }) {
   const [open, setOpen] = useState(false);
 
   const toolName = (part.toolName ?? part.type.replace(/^tool-/, "")) || "tool";
@@ -198,22 +229,30 @@ function ToolCallBlock({
 function AssistantMessage({
   message,
   showToolCalls,
+  projectId,
 }: {
   message: UIMessage;
   showToolCalls: boolean;
+  projectId: string;
 }) {
-  const toolParts = message.parts.filter(isToolPart).map((part) => part as {
-    type: string;
-    toolCallId?: string;
-    toolName?: string;
-    state?: string;
-    input?: Record<string, unknown>;
-    output?: unknown;
-    errorText?: string;
-  });
+  const toolParts = message.parts.filter(isToolPart).map((part) => part as ToolPartInfo);
+
+  const editFileParts = toolParts.filter(
+    (p) =>
+      (p.toolName === "edit_file" || p.type === "tool-edit_file") &&
+      p.state === "output-available" &&
+      p.output,
+  );
 
   return (
     <div className="flex flex-col gap-3">
+      {editFileParts.map((part, index) => (
+        <FileEditNotification
+          key={part.toolCallId ?? `edit-${index}`}
+          part={part}
+          projectId={projectId}
+        />
+      ))}
       {showToolCalls ? toolParts.map((part, index) => <ToolCallBlock key={part.toolCallId ?? `${message.id}-tool-${index}`} part={part} />) : null}
       {!showToolCalls && toolParts.length > 0 ? (
         <div className="rounded-2xl border border-dashed border-border/80 bg-muted/25 px-3 py-2 text-xs text-muted-foreground">
@@ -270,21 +309,30 @@ function EmptyState({
   );
 }
 
+type ConversationSummary = {
+  id: string;
+  title: string;
+  created_at: string;
+};
+
 export function ChatPanel({
   projectId,
   chatId,
   initialMessages = [],
+  conversations = [],
 }: {
   projectId: string;
   chatId?: string;
   initialMessages?: UIMessage[];
+  conversations?: ConversationSummary[];
 }) {
   const [input, setInput] = useState("");
   const [showToolCalls, setShowToolCalls] = useState(false);
+  const [activeConversationId, setActiveConversationId] = useState(chatId);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { messages, sendMessage, status, error } = useChat({
-    id: chatId,
+  const { messages, sendMessage, status, error, setMessages } = useChat({
+    id: activeConversationId,
     messages: initialMessages,
     transport: new DefaultChatTransport({
       api: "/api/chat",
@@ -325,6 +373,24 @@ export function ChatPanel({
     [isBusy, sendMessage]
   );
 
+  async function switchConversation(conversationId: string) {
+    setActiveConversationId(conversationId);
+    try {
+      const response = await fetch(`/api/chat/conversations/${conversationId}/messages`);
+      if (response.ok) {
+        const { messages: msgs } = await response.json();
+        setMessages(msgs);
+      }
+    } catch {
+      setMessages([]);
+    }
+  }
+
+  async function startNewConversation() {
+    setActiveConversationId(undefined);
+    setMessages([]);
+  }
+
   return (
     <section className="flex h-[calc(100vh-9.5rem)] min-h-[38rem] flex-col">
       <Card className="relative flex h-full min-h-0 border-border/70 bg-card/95 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.35)] supports-[backdrop-filter]:backdrop-blur">
@@ -335,9 +401,14 @@ export function ChatPanel({
             Ask for grounded summaries, project decisions, risk reviews, or concrete updates to project files.
           </CardDescription>
           <CardAction className="flex flex-wrap items-center gap-2">
-            <div className="rounded-full border border-border/80 bg-background/90 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              Tool-assisted reasoning
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={startNewConversation}
+            >
+              New chat
+            </Button>
             <Button
               type="button"
               variant="outline"
@@ -346,7 +417,7 @@ export function ChatPanel({
               aria-pressed={showToolCalls}
             >
               {showToolCalls ? <EyeOff data-icon="inline-start" /> : <Eye data-icon="inline-start" />}
-              {showToolCalls ? "Hide tool traces" : "Show tool traces"}
+              {showToolCalls ? "Hide tools" : "Show tools"}
             </Button>
           </CardAction>
         </CardHeader>
@@ -375,7 +446,7 @@ export function ChatPanel({
                         {message.role === "user" ? (
                           <p className="whitespace-pre-wrap text-sm leading-7 text-primary-foreground">{userText}</p>
                         ) : (
-                          <AssistantMessage message={message} showToolCalls={showToolCalls} />
+                          <AssistantMessage message={message} showToolCalls={showToolCalls} projectId={projectId} />
                         )}
                       </div>
                     </article>
@@ -397,6 +468,25 @@ export function ChatPanel({
           </div>
         </CardContent>
         <CardFooter className="flex-col items-stretch gap-3 border-t border-border/70 bg-background/90 supports-[backdrop-filter]:bg-background/75 supports-[backdrop-filter]:backdrop-blur">
+          {conversations.length > 1 && (
+            <div className="flex flex-wrap gap-1.5">
+              {conversations.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => switchConversation(c.id)}
+                  className={cn(
+                    "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                    c.id === activeConversationId
+                      ? "border-primary/30 bg-primary/10 text-foreground"
+                      : "border-border text-muted-foreground hover:bg-muted",
+                  )}
+                >
+                  {c.title.length > 40 ? c.title.slice(0, 37) + "..." : c.title}
+                </button>
+              ))}
+            </div>
+          )}
           {error ? (
             <div className="rounded-2xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               Chat failed: {error.message}

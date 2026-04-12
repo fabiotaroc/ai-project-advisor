@@ -71,6 +71,20 @@ function toUIMessage(record: MessageRecord): UIMessage {
   };
 }
 
+export async function listProjectConversations(projectId: string, userId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("conversations")
+    .select("id,title,created_at")
+    .eq("project_id", projectId)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) throw error;
+  return (data ?? []) as { id: string; title: string; created_at: string }[];
+}
+
 export async function getLatestConversation(projectId: string, userId: string) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase

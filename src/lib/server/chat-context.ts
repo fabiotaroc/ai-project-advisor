@@ -80,6 +80,18 @@ export async function assembleProjectSystemPrompt(projectId: string, userId: str
       "- edit_file — create or update a project file (locked files will be rejected)",
       "- search_sources — semantic search across ingested source material chunks",
       "- read_source — read the full content of an ingested source material",
+      "",
+      "# Wiki Lint",
+      'When the user asks to "lint the wiki", "check wiki health", or "audit the project files", perform a systematic health check:',
+      "1. Read index.md and list_files to understand what exists",
+      "2. Read key files and check for:",
+      "   - Stale content: outdated dates, deadlines, or statuses",
+      "   - Contradictions: conflicting claims across files",
+      "   - Orphan pages: files with no inbound references from other files",
+      "   - Missing entity pages: people/clients/systems mentioned frequently but lacking a dedicated page",
+      "   - Index gaps: files present in the project but missing from index.md",
+      "3. Report findings as a structured list with severity (info/warning/issue)",
+      "4. Based on project settings, either propose fixes or make them directly",
     ].join("\n"),
   );
 
@@ -97,13 +109,26 @@ function serializeSettings(settings: ProjectSettings | null): string {
     proactive: "Proactively make improvements, create wiki pages, and suggest changes.",
   };
 
-  return [
+  const lines = [
     "# Operating Instructions",
     `- Tone: ${settings.tone}`,
     `- Verbosity: ${settings.verbosity}`,
     `- Default output format: ${settings.default_format}`,
     `- Proactivity: ${proactivityDesc[settings.proactivity] ?? settings.proactivity}`,
     `- Language: ${settings.language}`,
+  ];
+
+  const contextLines: string[] = [];
+  if (settings.client_name) contextLines.push(`- Client: ${settings.client_name}`);
+  if (settings.team_name) contextLines.push(`- Team: ${settings.team_name}`);
+  if (settings.project_phase) contextLines.push(`- Phase: ${settings.project_phase}`);
+  if (settings.additional_context) contextLines.push(`- Additional context: ${settings.additional_context}`);
+
+  if (contextLines.length > 0) {
+    lines.push("", "# Project Context", ...contextLines);
+  }
+
+  lines.push(
     "",
     "# Agent Permissions",
     settings.auto_synthesize_on_ingest
@@ -112,5 +137,7 @@ function serializeSettings(settings: ProjectSettings | null): string {
     settings.auto_create_entity_pages
       ? "- Auto-create entity pages: yes — create pages for recurring entities automatically"
       : "- Auto-create entity pages: no — ask before creating new entity pages",
-  ].join("\n");
+  );
+
+  return lines.join("\n");
 }

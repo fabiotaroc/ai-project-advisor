@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { embed } from "ai";
+import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import { getOptionalSessionUser } from "@/lib/server/auth";
 import { getProjectAccessForUser } from "@/lib/server/data";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const schema = z.object({ projectId: z.string().uuid(), query: z.string().min(2) });
@@ -16,40 +19,66 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = await createSupabaseServerClient();
+  const admin = createSupabaseAdminClient();
 
-  const { data: files } = await supabase
-    .from("project_files")
-    .select("id,path,content")
-    .eq("project_id", body.projectId)
-    .textSearch("content", body.query, { type: "plain" })
-    .limit(10);
+  const [ftsResult, vectorResult] = await Promise.all([
+    supabase
+      .from("project_files")
+      .select("id,path,content")
+      .eq("project_id", body.projectId)
+      .textSearch("content", body.query, { type: "plain" })
+      .limit(10),
 
-  const { data: chunks } = await supabase
-    .from("source_chunks")
-    .select("id,content,source_materials!inner(title,project_id)")
-    .eq("source_materials.project_id", body.projectId)
-    .textSearch("content", body.query, { type: "plain" })
-    .limit(10);
+    (async () => {
+      try {
+        const { embedding } = await embed({
+          model: openai.embedding("text-embedding-3-small"),
+          value: body.query,
+        });
 
-  const sourceResults = (chunks ?? []).map((chunk) => {
-    const source = Array.isArray(chunk.source_materials) ? chunk.source_materials[0] : chunk.source_materials;
-    return {
-      type: "source",
-      id: chunk.id,
-      title: source?.title ?? "Source",
-      excerpt: chunk.content.slice(0, 220),
-    };
+        const { data } = await admin.rpc("match_source_chunks", {
+          p_project_id: body.projectId,
+          p_query_embedding: embedding,
+          p_match_count: 10,
+        });
+
+        if (!data?.length) return [];
+
+        const sourceIds = [...new Set(data.map((d: { source_material_id: string }) => d.source_material_id))];
+        const { data: sources } = await admin
+          .from("source_materials")
+          .select("id,title")
+          .in("id", sourceIds);
+
+        const titleMap = new Map((sources ?? []).map((s) => [s.id, s.title]));
+
+        return data.map((chunk: { chunk_id: string; source_material_id: string; content: string; similarity: number }) => ({
+          type: "source" as const,
+          id: chunk.chunk_id,
+          title: titleMap.get(chunk.source_material_id) ?? "Source",
+          excerpt: chunk.content.slice(0, 280),
+          similarity: chunk.similarity,
+        }));
+      } catch {
+        return [];
+      }
+    })(),
+  ]);
+
+  const fileResults = (ftsResult.data ?? []).map((file) => ({
+    type: "file" as const,
+    id: file.id,
+    title: file.path,
+    excerpt: file.content.slice(0, 280),
+    similarity: null as number | null,
+  }));
+
+  const results = [...fileResults, ...vectorResult].sort((a, b) => {
+    if (a.type === "file" && b.type === "source") return -1;
+    if (a.type === "source" && b.type === "file") return 1;
+    if (a.similarity != null && b.similarity != null) return b.similarity - a.similarity;
+    return 0;
   });
-
-  const results = [
-    ...(files ?? []).map((file) => ({
-      type: "file",
-      id: file.id,
-      title: file.path,
-      excerpt: file.content.slice(0, 220),
-    })),
-    ...sourceResults,
-  ];
 
   return NextResponse.json({ results });
 }
