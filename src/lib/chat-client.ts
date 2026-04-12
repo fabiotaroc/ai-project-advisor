@@ -4,6 +4,21 @@ export type CreatedConversation = {
   created_at: string;
 };
 
+async function getResponseError(response: Response, fallbackMessage: string) {
+  let message = fallbackMessage;
+
+  try {
+    const payload = (await response.json()) as { error?: string };
+    if (payload.error) {
+      message = payload.error;
+    }
+  } catch {
+    // Keep the fallback error message when the response is not JSON.
+  }
+
+  return message;
+}
+
 export async function createProjectConversation(projectId: string) {
   const response = await fetch("/api/chat/conversations", {
     method: "POST",
@@ -14,19 +29,36 @@ export async function createProjectConversation(projectId: string) {
   });
 
   if (!response.ok) {
-    let message = "Failed to create a new conversation.";
-
-    try {
-      const payload = (await response.json()) as { error?: string };
-      if (payload.error) {
-        message = payload.error;
-      }
-    } catch {
-      // Keep the fallback error message when the response is not JSON.
-    }
-
-    throw new Error(message);
+    throw new Error(await getResponseError(response, "Failed to create a new conversation."));
   }
 
   return (await response.json()) as CreatedConversation;
+}
+
+export async function renameProjectConversation(conversationId: string, title: string) {
+  const response = await fetch(`/api/chat/conversations/${conversationId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ title }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getResponseError(response, "Failed to rename the conversation."));
+  }
+
+  return (await response.json()) as CreatedConversation;
+}
+
+export async function deleteProjectConversation(conversationId: string) {
+  const response = await fetch(`/api/chat/conversations/${conversationId}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error(await getResponseError(response, "Failed to delete the conversation."));
+  }
+
+  return (await response.json()) as { id: string };
 }
