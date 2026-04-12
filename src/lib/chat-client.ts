@@ -29,7 +29,7 @@ export async function createProjectConversation(projectId: string) {
   });
 
   if (!response.ok) {
-    throw new Error(await getResponseError(response, "Failed to create a new conversation."));
+    throw new Error(await getResponseError(response, "Failed to create a new chat."));
   }
 
   return (await response.json()) as CreatedConversation;
@@ -45,7 +45,7 @@ export async function renameProjectConversation(conversationId: string, title: s
   });
 
   if (!response.ok) {
-    throw new Error(await getResponseError(response, "Failed to rename the conversation."));
+    throw new Error(await getResponseError(response, "Failed to rename the chat."));
   }
 
   return (await response.json()) as CreatedConversation;
@@ -57,7 +57,7 @@ export async function deleteProjectConversation(conversationId: string) {
   });
 
   if (!response.ok) {
-    throw new Error(await getResponseError(response, "Failed to delete the conversation."));
+    throw new Error(await getResponseError(response, "Failed to delete the chat."));
   }
 
   return (await response.json()) as { id: string };

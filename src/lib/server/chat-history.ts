@@ -53,7 +53,7 @@ function getConversationTitle(messages: UIMessage[]) {
   const text = firstUserMessage ? getMessageText(firstUserMessage) : "";
 
   if (!text) {
-    return "New conversation";
+    return "New chat";
   }
 
   return text.length > 80 ? `${text.slice(0, 77).trimEnd()}...` : text;
@@ -188,7 +188,7 @@ export async function getLatestConversationWithMessages(projectId: string, userI
   };
 }
 
-export async function createConversation(projectId: string, userId: string, title = "New conversation") {
+export async function createConversation(projectId: string, userId: string, title = "New chat") {
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("conversations")
@@ -263,7 +263,7 @@ async function shouldAutoUpdateConversationTitle(conversationId: string) {
   const currentConversation = toConversationRecord(conversation);
   const currentTitle = currentConversation?.title.trim() ?? "";
 
-  if (!currentTitle || currentTitle === "New conversation") {
+  if (!currentTitle || currentTitle === "New chat" || currentTitle === "New conversation") {
     return true;
   }
 
