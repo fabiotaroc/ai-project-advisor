@@ -132,10 +132,10 @@ export async function getProjectAccessForUser(userId: string, projectId: string)
   return project ? { ...project, is_owned: false } : null;
 }
 
-export async function getProjectAccess(projectId: string) {
+export const getProjectAccess = cache(async (projectId: string) => {
   const user = await getSessionUser();
   return getProjectAccessForUser(user.id, projectId);
-}
+});
 
 export async function getProjectForUser(projectId: string) {
   const project = await getProjectAccess(projectId);

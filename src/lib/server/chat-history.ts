@@ -103,6 +103,36 @@ export async function getLatestConversation(projectId: string, userId: string) {
   return (data as ConversationRecord | null) ?? null;
 }
 
+export async function getConversationWithMessages(
+  projectId: string,
+  userId: string,
+  conversationId: string,
+) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("conversations")
+    .select("id,project_id,user_id,title,created_at")
+    .eq("id", conversationId)
+    .eq("project_id", projectId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  const messages = await getConversationMessages(conversationId);
+
+  return {
+    conversation: data as ConversationRecord,
+    messages,
+  };
+}
+
 export async function getConversationMessages(conversationId: string) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
@@ -133,29 +163,40 @@ export async function getLatestConversationWithMessages(projectId: string, userI
   };
 }
 
-export async function getOrCreateProjectConversation(projectId: string, userId: string, seedMessages: UIMessage[] = []) {
-  const existingConversation = await getLatestConversation(projectId, userId);
-
-  if (existingConversation) {
-    return existingConversation;
-  }
-
+export async function createConversation(projectId: string, userId: string, title = "New conversation") {
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("conversations")
-    .insert({
-      project_id: projectId,
-      user_id: userId,
-      title: getConversationTitle(seedMessages),
-    })
+    .insert({ project_id: projectId, user_id: userId, title })
     .select("id,project_id,user_id,title,created_at")
     .single();
 
-  if (error) {
-    throw error;
+  if (error) throw error;
+  return data as ConversationRecord;
+}
+
+export async function getOrCreateProjectConversation(
+  projectId: string,
+  userId: string,
+  conversationId?: string,
+  seedMessages: UIMessage[] = [],
+) {
+  if (conversationId) {
+    const supabase = createSupabaseAdminClient();
+    const { data } = await supabase
+      .from("conversations")
+      .select("id,project_id,user_id,title,created_at")
+      .eq("id", conversationId)
+      .eq("project_id", projectId)
+      .maybeSingle();
+
+    if (data) return data as ConversationRecord;
   }
 
-  return data as ConversationRecord;
+  const existing = await getLatestConversation(projectId, userId);
+  if (existing) return existing;
+
+  return createConversation(projectId, userId, getConversationTitle(seedMessages));
 }
 
 export async function replaceConversationMessages(conversationId: string, messages: UIMessage[]) {

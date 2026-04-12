@@ -1,11 +1,14 @@
 import type { ReactNode } from "react";
-import { getSessionUser, syncSessionProjectInvites } from "@/lib/server/auth";
-
-export const dynamic = "force-dynamic";
+import { ProjectInviteSync } from "@/components/auth/project-invite-sync";
+import { getSessionUser } from "@/lib/server/auth";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
-  await getSessionUser();
-  await syncSessionProjectInvites();
+  const user = await getSessionUser();
 
-  return children;
+  return (
+    <>
+      <ProjectInviteSync userId={user.id} />
+      {children}
+    </>
+  );
 }

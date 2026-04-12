@@ -19,8 +19,11 @@ export async function PATCH(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const access = await getProjectAccessForUser(user.id, body.projectId);
-  if (!access || access.role === "viewer") {
+  if (!access) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (access.role === "viewer") {
+    return NextResponse.json({ error: "Viewers have read-only access to this project." }, { status: 403 });
   }
 
   const { projectId: _, fileId, ...updates } = body;

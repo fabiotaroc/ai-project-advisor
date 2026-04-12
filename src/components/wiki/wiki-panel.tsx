@@ -28,29 +28,55 @@ import {
 import { cn } from "@/lib/utils";
 import type { ProjectFile } from "@/lib/types";
 
-function FileMetaBadges({ file }: { file: ProjectFile }) {
+function FileMetaBadges({
+  file,
+  onPrimary = false,
+}: {
+  file: ProjectFile;
+  onPrimary?: boolean;
+}) {
+  const onPrimaryClass =
+    "border-primary-foreground/35 bg-primary-foreground/15 text-primary-foreground [&>svg]:opacity-90";
+
   return (
     <div className="flex flex-wrap items-center gap-1">
       {file.pinned && (
-        <Badge variant="secondary" className="gap-1 text-[10px]">
+        <Badge
+          variant="secondary"
+          className={cn("gap-1 text-[10px]", onPrimary && onPrimaryClass)}
+        >
           <Pin className="size-2.5" />
           Pinned
         </Badge>
       )}
       {file.is_source_of_truth && (
-        <Badge variant="outline" className="gap-1 border-chart-1/30 bg-chart-1/8 text-[10px] text-chart-1">
+        <Badge
+          variant="outline"
+          className={cn(
+            "gap-1 text-[10px]",
+            onPrimary
+              ? onPrimaryClass
+              : "border-chart-1/30 bg-chart-1/8 text-chart-1",
+          )}
+        >
           <ShieldCheck className="size-2.5" />
           Source of truth
         </Badge>
       )}
       {file.locked && (
-        <Badge variant="outline" className="gap-1 text-[10px]">
+        <Badge
+          variant="outline"
+          className={cn("gap-1 text-[10px]", onPrimary && onPrimaryClass)}
+        >
           <Lock className="size-2.5" />
           Locked
         </Badge>
       )}
       {file.created_by_agent && (
-        <Badge variant="secondary" className="gap-1 text-[10px]">
+        <Badge
+          variant="secondary"
+          className={cn("gap-1 text-[10px]", onPrimary && onPrimaryClass)}
+        >
           <Bot className="size-2.5" />
           Agent
         </Badge>
@@ -232,7 +258,7 @@ export function WikiPanel({
                 )}
                 <span className="truncate font-mono text-xs font-medium">{file.path}</span>
               </div>
-              <FileMetaBadges file={file} />
+              <FileMetaBadges file={file} onPrimary={selectedPath === file.path} />
             </button>
           </li>
         ))}

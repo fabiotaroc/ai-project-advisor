@@ -17,7 +17,8 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import type { ProjectSettings } from "@/lib/types";
+import type { ProjectInvite, ProjectRole, ProjectSettings } from "@/lib/types";
+import { MembersPanel, type MemberData } from "@/components/settings/members-panel";
 
 const DEFAULTS: ProjectSettings = {
   project_id: "",
@@ -93,10 +94,16 @@ function SwitchField({
 
 export function SettingsPanel({
   projectId,
+  projectRole,
   initialSettings,
+  initialMembers,
+  initialInvites,
 }: {
   projectId: string;
+  projectRole: ProjectRole;
   initialSettings: ProjectSettings | null;
+  initialMembers: MemberData[];
+  initialInvites: ProjectInvite[];
 }) {
   const [settings, setSettings] = useState<ProjectSettings>({
     ...DEFAULTS,
@@ -150,6 +157,7 @@ export function SettingsPanel({
           <TabsTrigger value="interaction">Interaction</TabsTrigger>
           <TabsTrigger value="context">Project Context</TabsTrigger>
           <TabsTrigger value="permissions">Agent Permissions</TabsTrigger>
+          <TabsTrigger value="members">Members</TabsTrigger>
           <TabsTrigger value="templates">Output Templates</TabsTrigger>
         </TabsList>
 
@@ -305,6 +313,15 @@ export function SettingsPanel({
               />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="members" className="mt-4">
+          <MembersPanel
+            projectId={projectId}
+            projectRole={projectRole}
+            initialMembers={initialMembers}
+            initialInvites={initialInvites}
+          />
         </TabsContent>
 
         <TabsContent value="templates" className="mt-4">

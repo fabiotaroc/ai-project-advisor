@@ -15,6 +15,7 @@ export const maxDuration = 60;
 
 const schema = z.object({
   projectId: z.string().uuid(),
+  conversationId: z.string().uuid().optional(),
   messages: z.array(z.custom<UIMessage>()),
 });
 
@@ -26,14 +27,16 @@ export async function POST(request: Request) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
   }
 
-  if (!(await getProjectAccessForUser(user.id, body.projectId))) {
+  const access = await getProjectAccessForUser(user.id, body.projectId);
+  if (!access) {
     return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
   }
 
   const projectId = body.projectId;
+  const canWrite = access.role !== "viewer";
   const admin = createSupabaseAdminClient();
   const system = await assembleProjectSystemPrompt(projectId, user.id);
-  const conversation = await getOrCreateProjectConversation(projectId, user.id, body.messages);
+  const conversation = await getOrCreateProjectConversation(projectId, user.id, body.conversationId, body.messages);
 
   const modelMessages = await convertToModelMessages(body.messages);
 
@@ -74,6 +77,10 @@ export async function POST(request: Request) {
         description: "Create or update a project file by path. Locked files cannot be edited.",
         inputSchema: z.object({ path: z.string().min(1), content: z.string() }),
         execute: async ({ path, content }) => {
+          if (!canWrite) {
+            return { error: "You have viewer access to this project. File edits are not allowed." };
+          }
+
           const { data: existing } = await admin
             .from("project_files")
             .select("id,locked")

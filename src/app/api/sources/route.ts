@@ -18,8 +18,12 @@ export async function POST(request: NextRequest) {
   const user = await getOptionalSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (!(await getProjectAccessForUser(user.id, body.projectId))) {
+  const access = await getProjectAccessForUser(user.id, body.projectId);
+  if (!access) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (access.role === "viewer") {
+    return NextResponse.json({ error: "Viewers have read-only access to this project." }, { status: 403 });
   }
 
   const supabase = await createSupabaseServerClient();

@@ -23,19 +23,12 @@ import {
   Wrench,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -309,7 +302,7 @@ function EmptyState({
   );
 }
 
-type ConversationSummary = {
+export type ConversationSummary = {
   id: string;
   title: string;
   created_at: string;
@@ -319,26 +312,30 @@ export function ChatPanel({
   projectId,
   chatId,
   initialMessages = [],
-  conversations = [],
 }: {
   projectId: string;
   chatId?: string;
   initialMessages?: UIMessage[];
   conversations?: ConversationSummary[];
 }) {
+  const router = useRouter();
   const [input, setInput] = useState("");
   const [showToolCalls, setShowToolCalls] = useState(false);
-  const [activeConversationId, setActiveConversationId] = useState(chatId);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { messages, sendMessage, status, error, setMessages } = useChat({
-    id: activeConversationId,
+  const stableChatId = chatId ?? `${projectId}-new`;
+
+  const { messages, sendMessage, status, error } = useChat({
+    id: stableChatId,
     messages: initialMessages,
     transport: new DefaultChatTransport({
       api: "/api/chat",
-      body: { projectId },
+      body: { projectId, conversationId: chatId },
     }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    onFinish: () => {
+      router.refresh();
+    },
   });
 
   const isBusy = status === "submitted" || status === "streaming";
@@ -373,33 +370,15 @@ export function ChatPanel({
     [isBusy, sendMessage]
   );
 
-  async function switchConversation(conversationId: string) {
-    setActiveConversationId(conversationId);
-    try {
-      const response = await fetch(`/api/chat/conversations/${conversationId}/messages`);
-      if (response.ok) {
-        const { messages: msgs } = await response.json();
-        setMessages(msgs);
-      }
-    } catch {
-      setMessages([]);
-    }
-  }
-
-  async function startNewConversation() {
-    setActiveConversationId(undefined);
-    setMessages([]);
+  function startNewConversation() {
+    router.push(`/project/${projectId}/chat?new`);
   }
 
   return (
     <section className="flex h-[calc(100vh-9.5rem)] min-h-[38rem] flex-col">
       <Card className="relative flex h-full min-h-0 border-border/70 bg-card/95 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.35)] supports-[backdrop-filter]:backdrop-blur">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-linear-to-b from-muted/45 via-muted/10 to-transparent" />
-        <CardHeader className="relative border-b border-border/70 bg-linear-to-br from-background via-background to-muted/40">
-          <CardTitle className="font-heading text-2xl tracking-tight sm:text-3xl">Advisor Chat</CardTitle>
-          <CardDescription className="max-w-2xl text-sm leading-6">
-            Ask for grounded summaries, project decisions, risk reviews, or concrete updates to project files.
-          </CardDescription>
+        <CardHeader className="relative !flex flex-row flex-wrap items-center justify-end gap-2 border-b border-border/70 bg-linear-to-br from-background via-background to-muted/40">
           <CardAction className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
@@ -468,25 +447,6 @@ export function ChatPanel({
           </div>
         </CardContent>
         <CardFooter className="flex-col items-stretch gap-3 border-t border-border/70 bg-background/90 supports-[backdrop-filter]:bg-background/75 supports-[backdrop-filter]:backdrop-blur">
-          {conversations.length > 1 && (
-            <div className="flex flex-wrap gap-1.5">
-              {conversations.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => switchConversation(c.id)}
-                  className={cn(
-                    "rounded-full border px-2.5 py-1 text-xs transition-colors",
-                    c.id === activeConversationId
-                      ? "border-primary/30 bg-primary/10 text-foreground"
-                      : "border-border text-muted-foreground hover:bg-muted",
-                  )}
-                >
-                  {c.title.length > 40 ? c.title.slice(0, 37) + "..." : c.title}
-                </button>
-              ))}
-            </div>
-          )}
           {error ? (
             <div className="rounded-2xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               Chat failed: {error.message}

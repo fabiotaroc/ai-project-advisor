@@ -2,9 +2,9 @@ import { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { AppHeader } from "@/components/layout/header";
 import { ProjectSidebar } from "@/components/layout/sidebar";
-import { getSessionUser } from "@/lib/server/auth";
 import { getProjectForUser } from "@/lib/server/data";
-import { listPendingProjectInvitesForOwner } from "@/lib/server/project-invites";
+import { getSessionUser } from "@/lib/server/auth";
+import { listProjectConversations } from "@/lib/server/chat-history";
 
 export default async function ProjectLayout({
   children,
@@ -14,18 +14,14 @@ export default async function ProjectLayout({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const user = await getSessionUser();
-  const project = await getProjectForUser(projectId).catch(() => null);
+  const [project, user] = await Promise.all([
+    getProjectForUser(projectId).catch(() => null),
+    getSessionUser(),
+  ]);
 
   if (!project) notFound();
 
-  const pendingInvites =
-    project.role === "owner"
-      ? await listPendingProjectInvitesForOwner({
-          projectId,
-          userId: user.id,
-        })
-      : [];
+  const conversations = await listProjectConversations(projectId, user.id);
 
   return (
     <>
@@ -35,7 +31,7 @@ export default async function ProjectLayout({
           projectId={projectId}
           projectName={project.name}
           projectRole={project.role}
-          initialInvites={pendingInvites}
+          conversations={conversations}
         />
         <div className="min-w-0 flex-1 p-4">{children}</div>
       </main>
