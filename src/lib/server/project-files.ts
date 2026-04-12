@@ -1,6 +1,18 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
-export async function editProjectFile({ projectId, path, content, userId }: { projectId: string; path: string; content: string; userId: string }) {
+export async function editProjectFile({
+  projectId,
+  path,
+  content,
+  userId,
+  createdByAgent = false,
+}: {
+  projectId: string;
+  path: string;
+  content: string;
+  userId: string;
+  createdByAgent?: boolean;
+}) {
   const supabase = createSupabaseAdminClient();
 
   const { data: existing } = await supabase
@@ -40,7 +52,13 @@ export async function editProjectFile({ projectId, path, content, userId }: { pr
 
   const { data, error } = await supabase
     .from("project_files")
-    .insert({ project_id: projectId, path, content, updated_by: userId })
+    .insert({
+      project_id: projectId,
+      path,
+      content,
+      updated_by: userId,
+      created_by_agent: createdByAgent,
+    })
     .select("*")
     .single();
 

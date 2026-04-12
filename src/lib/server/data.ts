@@ -13,7 +13,7 @@ import type {
 type ProjectAccess = {
   id: string;
   name: string;
-  workspace_id: string;
+  owner_id: string;
   role: ProjectRole;
 };
 
@@ -25,12 +25,12 @@ function flattenProjectAccess(
           | {
               id: string;
               name: string;
-              workspace_id: string;
+              owner_id: string;
             }
           | {
               id: string;
               name: string;
-              workspace_id: string;
+              owner_id: string;
             }[]
           | null;
       }
@@ -46,77 +46,89 @@ function flattenProjectAccess(
   return {
     id: project.id,
     name: project.name,
-    workspace_id: project.workspace_id,
+    owner_id: project.owner_id,
     role: row.role,
   };
 }
 
-export const getCurrentWorkspace = cache(async () => {
-  const user = await getSessionUser();
-  const supabase = await createSupabaseServerClient();
-
-  const { data, error } = await supabase
-    .from("workspaces")
-    .select("id,name")
-    .eq("owner_id", user.id)
-    .single();
-
-  if (error) throw error;
-  return data;
-});
-
 export const getAccessibleProjects = cache(async (): Promise<AccessibleProject[]> => {
   const user = await getSessionUser();
-  const [workspace, supabase] = await Promise.all([
-    getCurrentWorkspace(),
-    createSupabaseServerClient(),
-  ]);
+  const supabase = await createSupabaseServerClient();
+  const [{ data: ownedProjects, error: ownedError }, { data: memberRows, error: memberError }] =
+    await Promise.all([
+      supabase.from("projects").select("id,name,owner_id").eq("owner_id", user.id),
+      supabase
+        .from("project_members")
+        .select("role,project:projects!inner(id,name,owner_id)")
+        .eq("user_id", user.id),
+    ]);
 
-  const { data, error } = await supabase
-    .from("project_members")
-    .select("role,project:projects!inner(id,name,workspace_id)")
-    .eq("user_id", user.id);
+  if (ownedError) throw ownedError;
+  if (memberError) throw memberError;
 
-  if (error) throw error;
+  const ownedById = new Map(
+    (ownedProjects ?? []).map((project) => [
+      project.id,
+      {
+        id: project.id,
+        name: project.name,
+        owner_id: project.owner_id,
+        role: "owner" as const,
+        is_owned: true,
+      },
+    ]),
+  );
 
-  return (data ?? [])
+  const sharedProjects = (memberRows ?? [])
     .map((row) => flattenProjectAccess(row))
     .filter((project): project is ProjectAccess => Boolean(project))
+    .filter((project) => !ownedById.has(project.id))
     .map((project) => ({
       ...project,
-      is_personal: project.workspace_id === workspace.id,
-    }))
-    .sort((left, right) => {
-      if (left.is_personal !== right.is_personal) {
-        return left.is_personal ? -1 : 1;
+      is_owned: false,
+    }));
+
+  return [...ownedById.values(), ...sharedProjects].sort((left, right) => {
+      if (left.is_owned !== right.is_owned) {
+        return left.is_owned ? -1 : 1;
       }
 
       return left.name.localeCompare(right.name);
     });
 });
 
-export async function getProjectsByWorkspace(workspaceId: string) {
-  const projects = await getAccessibleProjects();
-  return projects.filter((project) => project.workspace_id === workspaceId);
-}
-
-export async function getProjectsForCurrentWorkspace() {
-  const workspace = await getCurrentWorkspace();
-  return getProjectsByWorkspace(workspace.id);
-}
-
 export async function getProjectAccessForUser(userId: string, projectId: string) {
   const supabase = await createSupabaseServerClient();
+  const { data: ownedProject, error: ownedError } = await supabase
+    .from("projects")
+    .select("id,name,owner_id")
+    .eq("id", projectId)
+    .eq("owner_id", userId)
+    .maybeSingle();
+
+  if (ownedError) throw ownedError;
+
+  if (ownedProject) {
+    return {
+      id: ownedProject.id,
+      name: ownedProject.name,
+      owner_id: ownedProject.owner_id,
+      role: "owner" as const,
+      is_owned: true,
+    };
+  }
+
   const { data, error } = await supabase
     .from("project_members")
-    .select("role,project:projects!inner(id,name,workspace_id)")
+    .select("role,project:projects!inner(id,name,owner_id)")
     .eq("user_id", userId)
     .eq("project_id", projectId)
     .maybeSingle();
 
   if (error) throw error;
 
-  return flattenProjectAccess(data);
+  const project = flattenProjectAccess(data);
+  return project ? { ...project, is_owned: false } : null;
 }
 
 export async function getProjectAccess(projectId: string) {

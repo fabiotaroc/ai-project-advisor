@@ -16,14 +16,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { getAccessibleProjects, getCurrentWorkspace } from "@/lib/server/data";
+import { getAccessibleProjects } from "@/lib/server/data";
 
 export default async function AppHomePage() {
-  const [workspace, projects] = await Promise.all([
-    getCurrentWorkspace(),
-    getAccessibleProjects(),
-  ]);
-  const sharedProjects = projects.filter((project) => !project.is_personal);
+  const projects = await getAccessibleProjects();
+  const ownedProjects = projects.filter((project) => project.is_owned);
+  const sharedProjects = projects.filter((project) => !project.is_owned);
 
   return (
     <>
@@ -32,26 +30,26 @@ export default async function AppHomePage() {
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
           <div className="rounded-[2rem] border border-border/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(246,248,252,0.94))] px-6 py-7 shadow-sm">
             <p className="text-[0.72rem] font-medium uppercase tracking-[0.3em] text-muted-foreground">
-              Personal workspace
+              Project portfolio
             </p>
             <h1 className="mt-3 max-w-2xl text-4xl font-semibold tracking-tight text-foreground md:text-5xl">
               Select a project and keep moving.
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
-              You are working from <span className="font-medium text-foreground">{workspace.name}</span>.
-              Jump into your own projects or continue a collaboration that was shared with you.
+              Your owned projects and shared collaborations live here. Jump back into a project
+              workspace with chat, files, search, and activity already in context.
             </p>
           </div>
 
           <Card className="justify-between border border-border/70 bg-card/90 shadow-sm">
             <CardHeader>
-              <CardDescription>Workspace snapshot</CardDescription>
+              <CardDescription>Project snapshot</CardDescription>
               <CardTitle className="text-3xl">{projects.length}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
               <div className="flex items-center justify-between rounded-xl border border-border/70 bg-muted/40 px-3 py-2">
-                <span>Projects</span>
-                <span className="font-medium text-foreground">{projects.length}</span>
+                <span>Owned by you</span>
+                <span className="font-medium text-foreground">{ownedProjects.length}</span>
               </div>
               <div className="flex items-center justify-between rounded-xl border border-border/70 bg-muted/40 px-3 py-2">
                 <span>Shared with you</span>
@@ -94,9 +92,9 @@ export default async function AppHomePage() {
                             <CardDescription className="mt-1 flex flex-wrap items-center gap-2">
                               <span>Persistent memory, files, search, and activity in one place.</span>
                               <span className="inline-flex items-center rounded-full border border-border/80 bg-muted/50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                                {project.is_personal ? "Personal" : "Shared"}
+                                {project.is_owned ? "Owned" : "Shared"}
                               </span>
-                              {!project.is_personal ? (
+                              {!project.is_owned ? (
                                 <span className="inline-flex items-center gap-1 rounded-full border border-border/80 bg-background px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-foreground">
                                   <Users className="size-3" />
                                   {project.role}

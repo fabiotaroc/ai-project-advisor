@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A web app where non-technical users chat with an AI project advisor that maintains persistent, structured memory about their project. The user sees a SaaS workspace with chat, files, and sources. Under the hood, each project has a virtual filesystem of Markdown documents backed by Supabase, and the agent reads and writes those files with the same minimal tool set it would use in Codex or Cursor.
+A web app where non-technical users chat with an AI project advisor that maintains persistent, structured memory about their project. The user sees a SaaS app with chat, files, and sources. Under the hood, each project has a virtual filesystem of Markdown documents backed by Supabase, and the agent reads and writes those files with the same minimal tool set it would use in Codex or Cursor.
 
 ## The Core Translation Problem
 
@@ -23,7 +23,7 @@ The web app should preserve that model exactly. Each project has a virtual files
 | Any user-created file                | `project_files` row, user-chosen path              |
 
 
-The distinction: **project files** are Markdown documents the agent and user read/write (the workspace). **Source materials** are uploaded binary files (PDFs, DOCX, .eml) that go through the ingestion pipeline.
+The distinction: **project files** are Markdown documents the agent and user read/write (the project's working memory). **Source materials** are uploaded binary files (PDFs, DOCX, .eml) that go through the ingestion pipeline.
 
 ## How The Agent Works
 
@@ -85,14 +85,8 @@ auth.users
 profiles
   id, email, name, avatar_url, created_at
 
-workspaces
-  id, name, owner_id, created_at
-
-workspace_members
-  workspace_id, user_id, role
-
 projects
-  id, workspace_id, name, agent_instructions, created_at
+  id, owner_id, name, agent_instructions, created_at
 
 project_members
   project_id, user_id, role
@@ -158,8 +152,8 @@ These are implementation constraints, not optional suggestions. Another agent sh
 - All schema changes should be applied through Supabase migrations, not ad hoc SQL edits in production.
 - Use `gen_random_uuid()` primary keys unless a table has a strong reason to use another key shape.
 - Add `created_at default now()` to all app tables and `updated_at default now()` to mutable tables.
-- Add a shared trigger to keep `updated_at` current on mutable tables such as `profiles`, `workspaces`, `projects`, `project_files`, `source_materials`, and any future editable metadata tables.
-- Add unique constraints on membership tables to prevent duplicate rows, for example `(workspace_id, user_id)` and `(project_id, user_id)`.
+- Add a shared trigger to keep `updated_at` current on mutable tables such as `profiles`, `projects`, `project_files`, `source_materials`, and any future editable metadata tables.
+- Add unique constraints on membership tables to prevent duplicate rows, for example `(project_id, user_id)`.
 - Add unique constraints where path or version identity matters, especially `(project_id, path)` on `project_files` and `(project_file_id, version)` on `project_file_versions`.
 - Add foreign keys with clear delete behavior. Use cascading deletes for strictly dependent records like `project_file_versions`, `messages`, and `source_chunks`; use restrictive behavior where deleting a parent would be unsafe.
 - Add indexes for expected high-volume access paths, especially foreign keys, `project_files(project_id, path)`, `messages(conversation_id, created_at)`, `activity_events(project_id, created_at)`, and `source_materials(project_id, created_at)`.
@@ -177,7 +171,7 @@ Next.js + TypeScript + Tailwind. Standard SaaS layout.
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  Workspace switcher / header                    │
+│  App header                                     │
 ├──────────┬──────────────────────────────────────┤
 │          │                                      │
 │ Sidebar  │  Main content area                   │
@@ -273,10 +267,10 @@ Next.js API routes + Vercel AI SDK + Supabase client. No separate backend servic
 - Supabase Auth for login (email/password + OAuth)
 - Use `auth.users` for authentication and `profiles` for application user data
 - Create a profile row automatically when a new auth user is created
-- Row-level security on all tables scoped to workspace membership
+- Row-level security on all tables scoped to project ownership or project membership
 - Project-level roles: owner, editor, viewer
 - All retrieval and agent tool calls filtered by project scope
-- Storage access for `sources` and `exports` must also be protected by project/workspace-aware policies, not just table RLS
+- Storage access for `sources` and `exports` must also be protected by project-aware policies, not just table RLS
 - Prefer policy logic that resolves access through membership tables so v2/v3 permission changes can extend the model without a schema rewrite
 
 ## Intentionally Deferred

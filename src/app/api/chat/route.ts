@@ -1,4 +1,4 @@
-import { consumeStream, streamText, tool, convertToModelMessages, UIMessage } from "ai";
+import { consumeStream, embed, streamText, tool, convertToModelMessages, UIMessage } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import { getOptionalSessionUser } from "@/lib/server/auth";
@@ -44,10 +44,14 @@ export async function POST(request: Request) {
     abortSignal: request.signal,
     tools: {
       list_files: tool({
-        description: "List all project files for this project",
+        description: "List all project files with display metadata",
         inputSchema: z.object({}),
         execute: async () => {
-          const { data, error } = await admin.from("project_files").select("path,updated_at").eq("project_id", projectId).order("path", { ascending: true });
+          const { data, error } = await admin
+            .from("project_files")
+            .select("path,pinned,visibility,locked,is_source_of_truth,created_by_agent,updated_at")
+            .eq("project_id", projectId)
+            .order("path", { ascending: true });
           if (error) throw error;
           return data ?? [];
         },
@@ -56,39 +60,115 @@ export async function POST(request: Request) {
         description: "Read a project file by path",
         inputSchema: z.object({ path: z.string().min(1) }),
         execute: async ({ path }) => {
-          const { data, error } = await admin.from("project_files").select("path,content,updated_at").eq("project_id", projectId).eq("path", path).maybeSingle();
+          const { data, error } = await admin
+            .from("project_files")
+            .select("path,content,pinned,locked,is_source_of_truth,updated_at")
+            .eq("project_id", projectId)
+            .eq("path", path)
+            .maybeSingle();
           if (error) throw error;
           return data;
         },
       }),
       edit_file: tool({
-        description: "Create or update a project file by path",
+        description: "Create or update a project file by path. Locked files cannot be edited.",
         inputSchema: z.object({ path: z.string().min(1), content: z.string() }),
         execute: async ({ path, content }) => {
-          const file = await editProjectFile({ projectId, path, content, userId: user.id });
-          await admin.from("activity_events").insert({ project_id: projectId, event_type: "agent_file_edit", summary: `Agent updated ${path}`, actor_id: user.id, target_type: "project_file", target_id: file.id });
-          return file;
+          const { data: existing } = await admin
+            .from("project_files")
+            .select("id,locked")
+            .eq("project_id", projectId)
+            .eq("path", path)
+            .maybeSingle();
+
+          if (existing?.locked) {
+            return { error: `File "${path}" is locked and cannot be edited by the agent.` };
+          }
+
+          const isNewFile = !existing;
+
+          const file = await editProjectFile({
+            projectId,
+            path,
+            content,
+            userId: user.id,
+            createdByAgent: isNewFile,
+          });
+
+          if (isNewFile && path !== "index.md") {
+            const { data: indexFile } = await admin
+              .from("project_files")
+              .select("id,content")
+              .eq("project_id", projectId)
+              .eq("path", "index.md")
+              .maybeSingle();
+
+            if (indexFile) {
+              await admin
+                .from("project_files")
+                .update({
+                  content: indexFile.content.trimEnd() + `\n- ${path} — (summary pending)\n`,
+                })
+                .eq("id", indexFile.id);
+            }
+          }
+
+          await admin.from("activity_events").insert({
+            project_id: projectId,
+            event_type: "agent_file_edit",
+            summary: `Agent ${isNewFile ? "created" : "updated"} ${path}`,
+            actor_id: user.id,
+            target_type: "project_file",
+            target_id: file.id,
+          });
+
+          return { path: file.path, updated_at: file.updated_at, created: isNewFile };
         },
       }),
       search_sources: tool({
-        description: "Search source material chunks by keyword",
+        description: "Semantic search across ingested source material chunks",
         inputSchema: z.object({ query: z.string().min(2) }),
         execute: async ({ query }) => {
-          const { data, error } = await admin
-            .from("source_chunks")
-            .select("id,content,source_materials!inner(id,title,project_id)")
-            .eq("source_materials.project_id", projectId)
-            .textSearch("content", query, { type: "plain" })
-            .limit(8);
+          const { embedding: queryEmbedding } = await embed({
+            model: openai.embedding("text-embedding-3-small"),
+            value: query,
+          });
+
+          const { data, error } = await admin.rpc("match_source_chunks", {
+            p_project_id: projectId,
+            p_query_embedding: queryEmbedding,
+            p_match_count: 8,
+          });
+
           if (error) throw error;
-          return data ?? [];
+          if (!data?.length) return [];
+
+          const sourceIds = [...new Set(data.map((d: { source_material_id: string }) => d.source_material_id))];
+          const { data: sources } = await admin
+            .from("source_materials")
+            .select("id,title")
+            .in("id", sourceIds);
+
+          const titleMap = new Map((sources ?? []).map((s) => [s.id, s.title]));
+
+          return data.map((chunk: { chunk_id: string; source_material_id: string; content: string; similarity: number }) => ({
+            chunk_id: chunk.chunk_id,
+            source_material_id: chunk.source_material_id,
+            source_title: titleMap.get(chunk.source_material_id) ?? "Unknown",
+            content: chunk.content,
+            similarity: chunk.similarity,
+          }));
         },
       }),
       read_source: tool({
         description: "Read a full source material by ID",
         inputSchema: z.object({ sourceMaterialId: z.string().uuid() }),
         execute: async ({ sourceMaterialId }) => {
-          const { data, error } = await admin.from("source_materials").select("id,title,type,summary,parsed_content,metadata").eq("id", sourceMaterialId).single();
+          const { data, error } = await admin
+            .from("source_materials")
+            .select("id,title,type,summary,parsed_content,metadata")
+            .eq("id", sourceMaterialId)
+            .single();
           if (error) throw error;
           return data;
         },

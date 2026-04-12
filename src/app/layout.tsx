@@ -16,7 +16,7 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Project Advisor",
-  description: "AI workspace for persistent project memory.",
+  description: "AI project advisor for persistent project memory.",
 };
 
 export default function RootLayout({

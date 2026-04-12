@@ -3,9 +3,27 @@ export type ProjectFile = {
   project_id: string;
   path: string;
   content: string;
+  created_by_agent: boolean;
+  pinned: boolean;
+  visibility: "surfaced" | "internal";
+  locked: boolean;
+  is_source_of_truth: boolean;
   updated_by: string | null;
   updated_at: string;
   created_at: string;
+};
+
+export type ProjectSettings = {
+  project_id: string;
+  tone: "formal" | "conversational" | "neutral";
+  verbosity: "concise" | "standard" | "detailed";
+  default_format: "prose" | "bullets" | "tables" | "structured";
+  proactivity: "reactive" | "suggestive" | "proactive";
+  language: string;
+  auto_synthesize_on_ingest: boolean;
+  auto_create_entity_pages: boolean;
+  created_at: string;
+  updated_at: string;
 };
 
 export type SourceMaterial = {
@@ -32,9 +50,9 @@ export type ProjectRole = "owner" | "editor" | "viewer";
 export type AccessibleProject = {
   id: string;
   name: string;
-  workspace_id: string;
+  owner_id: string;
   role: ProjectRole;
-  is_personal: boolean;
+  is_owned: boolean;
 };
 
 export type ProjectInviteRole = Exclude<ProjectRole, "owner">;

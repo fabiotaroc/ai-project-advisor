@@ -22,24 +22,21 @@ function normalizeEmail(email: string) {
 async function getOwnedProject(projectId: string, userId: string): Promise<OwnerProject | null> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
-    .from("project_members")
-    .select("role, project:projects!inner(id,name)")
-    .eq("project_id", projectId)
-    .eq("user_id", userId)
-    .eq("role", "owner")
+    .from("projects")
+    .select("id,name")
+    .eq("id", projectId)
+    .eq("owner_id", userId)
     .maybeSingle();
 
   if (error) throw error;
 
-  const project = Array.isArray(data?.project) ? data.project[0] : data?.project;
-
-  if (!project) {
+  if (!data) {
     return null;
   }
 
   return {
-    id: project.id,
-    name: project.name,
+    id: data.id,
+    name: data.name,
   };
 }
 

@@ -29,10 +29,10 @@ const copy = {
     footerAction: "Create one",
   },
   signup: {
-    eyebrow: "Create your workspace",
-    title: "Start with a personal workspace and grow into collaboration.",
+    eyebrow: "Create your account",
+    title: "Start your first project and collaborate when needed.",
     description:
-      "Create your account, get your personal workspace automatically, and join invited projects as soon as you sign in.",
+      "Create your account, start your own projects, and join invited collaborations as soon as you sign in.",
     button: "Create account",
     footerLabel: "Already have an account?",
     footerHref: "/login",
@@ -70,7 +70,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       {
         icon: Users,
         title: "Project collaboration",
-        description: "Join shared projects without giving up your own workspace.",
+        description: "Own your projects and join shared ones with the same account.",
       },
       {
         icon: Sparkles,

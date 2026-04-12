@@ -21,7 +21,7 @@ A collaborative web app that gives teams a persistent AI advisor grounded in the
 
 The current workflow is powerful because it combines:
 
-- a persistent workspace
+- a persistent project home
 - structured memory
 - source material ingestion
 - an AI assistant that can reason across the project
@@ -238,8 +238,8 @@ Prove that a small team can use the product as a shared AI project advisor and r
 
 ### In Scope
 
-- Workspace creation
-- Projects within a workspace
+- Project creation
+- Shared project access with basic roles
 - Team members with basic roles
 - Chat with project context
 - Upload documents, markdown notes, and emails
@@ -302,13 +302,13 @@ The product should be validated through a small number of flagship use cases tha
 
 ### Main Screens
 
-### 1. Workspace Home
+### 1. Home
 
 - List of projects
 - Recent activity
 - Draft changes generated during user-requested workflows
 
-### 2. Project Workspace
+### 2. Project Home
 
 - Chat panel
 - Source materials panel
@@ -340,7 +340,7 @@ Collaboration is a core part of the value proposition.
 
 ### MVP Collaboration Features
 
-- Shared workspace access
+- Shared project access
 - Project-level member roles
 - Visible authorship and timestamps
 - Activity feed
@@ -381,7 +381,7 @@ A practical early path is:
 
 ### Possible Pricing Shape
 
-- per workspace subscription
+- per seat or per active project subscription
 - or per seat with usage tiers
 - storage and AI usage limits included
 
@@ -441,7 +441,7 @@ Avoid heavily regulated use cases in the first go-to-market motion unless compli
 
 ### Functional Requirements
 
-- Users can create workspaces and projects
+- Users can create projects and share them with collaborators
 - Users can upload files and emails
 - The system extracts text and metadata from supported inputs
 - The system stores raw originals and parsed representations
@@ -509,10 +509,9 @@ Even if these are not all in MVP, the architecture should avoid locking the prod
 ### Core Tables / Collections
 
 - `users`
-- `workspaces`
-- `workspace_members`
 - `projects`
 - `project_members`
+- `project_invites`
 - `conversations`
 - `messages`
 - `source_materials`
@@ -624,7 +623,7 @@ Git should be optional, not foundational.
 
 ### Adoption
 
-- number of active workspaces
+- number of active owned projects
 - number of weekly active users
 - number of projects with repeated usage after initial setup
 
@@ -653,7 +652,7 @@ Git should be optional, not foundational.
 
 ## 21. Strategic Recommendation
 
-Do not start by building a generic AI workspace.
+Do not start by building a generic AI project hub.
 
 Start with a sharper wedge:
 
@@ -688,7 +687,6 @@ The practical sequence should be:
 
 ### Phase 1 - Usable Solo Tool
 
-- one workspace
 - one project advisor
 - file upload
 - chat with citations
@@ -698,7 +696,7 @@ The practical sequence should be:
 
 ### Phase 2 - Small Team Collaboration
 
-- shared workspace
+- shared projects
 - change preview flow
 - comments
 - activity feed
