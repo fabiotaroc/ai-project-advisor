@@ -4,7 +4,6 @@ import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import { getOptionalSessionUser } from "@/lib/server/auth";
 import { getProjectAccessForUser } from "@/lib/server/data";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const schema = z.object({ projectId: z.string().uuid(), query: z.string().min(2) });
@@ -19,7 +18,6 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = await createSupabaseServerClient();
-  const admin = createSupabaseAdminClient();
 
   const [ftsResult, vectorResult] = await Promise.all([
     supabase
@@ -36,7 +34,7 @@ export async function POST(request: NextRequest) {
           value: body.query,
         });
 
-        const { data } = await admin.rpc("match_source_chunks", {
+        const { data } = await supabase.rpc("match_source_chunks", {
           p_project_id: body.projectId,
           p_query_embedding: embedding,
           p_match_count: 10,
@@ -45,7 +43,7 @@ export async function POST(request: NextRequest) {
         if (!data?.length) return [];
 
         const sourceIds = [...new Set(data.map((d: { source_material_id: string }) => d.source_material_id))];
-        const { data: sources } = await admin
+        const { data: sources } = await supabase
           .from("source_materials")
           .select("id,title")
           .in("id", sourceIds);

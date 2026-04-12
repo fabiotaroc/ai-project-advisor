@@ -10,6 +10,7 @@ import {
 import { assembleProjectSystemPrompt } from "@/lib/server/chat-context";
 import { editProjectFile } from "@/lib/server/project-files";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const maxDuration = 60;
 
@@ -36,6 +37,7 @@ export async function POST(request: Request) {
   const projectId = body.projectId;
   const canWrite = access.role !== "viewer";
   const admin = createSupabaseAdminClient();
+  const userSupabase = await createSupabaseServerClient();
   const system = await assembleProjectSystemPrompt(projectId, user.id);
   const conversation = await getOrCreateProjectConversation(projectId, user.id, body.conversationId, body.messages);
   const showReasoning = body.showReasoning ?? false;
@@ -142,7 +144,7 @@ export async function POST(request: Request) {
         },
       }),
       search_sources: tool({
-        description: "Semantic search across ingested source material chunks",
+        description: "Semantic search across ingested source material chunks. Use returned source ids with read_source.",
         inputSchema: z.object({ query: z.string().min(2) }),
         execute: async ({ query }) => {
           const { embedding: queryEmbedding } = await embed({
@@ -150,7 +152,7 @@ export async function POST(request: Request) {
             value: query,
           });
 
-          const { data, error } = await admin.rpc("match_source_chunks", {
+          const { data, error } = await userSupabase.rpc("match_source_chunks", {
             p_project_id: projectId,
             p_query_embedding: queryEmbedding,
             p_match_count: 8,
@@ -160,7 +162,7 @@ export async function POST(request: Request) {
           if (!data?.length) return [];
 
           const sourceIds = [...new Set(data.map((d: { source_material_id: string }) => d.source_material_id))];
-          const { data: sources } = await admin
+          const { data: sources } = await userSupabase
             .from("source_materials")
             .select("id,title")
             .in("id", sourceIds);
@@ -177,15 +179,25 @@ export async function POST(request: Request) {
         },
       }),
       read_source: tool({
-        description: "Read a full source material by ID",
+        description:
+          "Read a full source material by ID. Only call this with a sourceMaterialId returned by search_sources.",
         inputSchema: z.object({ sourceMaterialId: z.string().uuid() }),
         execute: async ({ sourceMaterialId }) => {
-          const { data, error } = await admin
+          const { data, error } = await userSupabase
             .from("source_materials")
             .select("id,title,type,summary,parsed_content,metadata")
+            .eq("project_id", projectId)
             .eq("id", sourceMaterialId)
-            .single();
+            .maybeSingle();
           if (error) throw error;
+          if (!data) {
+            return {
+              found: false,
+              sourceMaterialId,
+              message:
+                "Source not found in this project. Run search_sources first and only use a returned sourceMaterialId.",
+            };
+          }
           return data;
         },
       }),

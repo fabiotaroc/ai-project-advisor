@@ -80,6 +80,7 @@ export async function assembleProjectSystemPrompt(projectId: string, userId: str
       "- edit_file — create or update a project file (locked files will be rejected)",
       "- search_sources — semantic search across ingested source material chunks",
       "- read_source — read the full content of an ingested source material",
+      "- Only call read_source with a sourceMaterialId returned by search_sources. If search_sources returns no results, do not call read_source.",
       "",
       "# Wiki Lint",
       'When the user asks to "lint the wiki", "check wiki health", or "audit the project files", perform a systematic health check:',
