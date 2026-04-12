@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { ProjectInvite, ProjectRole, ProjectSettings } from "@/lib/types";
 import { MembersPanel, type MemberData } from "@/components/settings/members-panel";
+import { ProjectIdentityCard } from "@/components/settings/project-identity-card";
 
 const DEFAULTS: ProjectSettings = {
   project_id: "",
@@ -95,12 +96,18 @@ function SwitchField({
 export function SettingsPanel({
   projectId,
   projectRole,
+  projectName,
+  projectDescription,
+  projectLogoUrl,
   initialSettings,
   initialMembers,
   initialInvites,
 }: {
   projectId: string;
   projectRole: ProjectRole;
+  projectName: string;
+  projectDescription: string;
+  projectLogoUrl: string | null;
   initialSettings: ProjectSettings | null;
   initialMembers: MemberData[];
   initialInvites: ProjectInvite[];
@@ -151,6 +158,14 @@ export function SettingsPanel({
           {isPending ? "Saving…" : saved ? "Saved" : "Save changes"}
         </Button>
       </div>
+
+      <ProjectIdentityCard
+        projectId={projectId}
+        isOwner={projectRole === "owner"}
+        initialName={projectName}
+        initialDescription={projectDescription}
+        initialLogoUrl={projectLogoUrl}
+      />
 
       <Tabs defaultValue="interaction" className="w-full">
         <TabsList className="w-full justify-start">

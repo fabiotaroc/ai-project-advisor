@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useSelectedLayoutSegment, useSearchParams } from "next/navigation";
+import { useRouter, useSelectedLayoutSegment, useSearchParams } from "next/navigation";
+import { useState } from "react";
 import {
   Activity,
   BookOpen,
@@ -14,8 +15,8 @@ import {
   Search,
   Settings,
 } from "lucide-react";
+import { createProjectConversation } from "@/lib/chat-client";
 import { cn } from "@/lib/utils";
-import type { ProjectRole } from "@/lib/types";
 
 const projectLinks = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
@@ -36,17 +37,33 @@ type ConversationSummary = {
 export function ProjectSidebar({
   projectId,
   projectName,
-  projectRole,
   conversations = [],
 }: {
   projectId: string;
   projectName: string;
-  projectRole: ProjectRole;
   conversations?: ConversationSummary[];
 }) {
+  const router = useRouter();
   const segment = useSelectedLayoutSegment() ?? "chat";
   const searchParams = useSearchParams();
   const activeConversationId = searchParams.get("c");
+  const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+
+  async function startNewConversation() {
+    if (isCreatingConversation) return;
+
+    setIsCreatingConversation(true);
+
+    try {
+      const conversation = await createProjectConversation(projectId);
+      router.push(`/project/${projectId}/chat?c=${conversation.id}`);
+      router.refresh();
+    } catch (error) {
+      console.error("Failed to create conversation", error);
+    } finally {
+      setIsCreatingConversation(false);
+    }
+  }
 
   return (
     <aside className="flex min-h-0 w-72 shrink-0 flex-col gap-4 border-r border-border bg-sidebar p-4">
@@ -85,29 +102,37 @@ export function ProjectSidebar({
             <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
               Chats
             </p>
-            <Link
-              href={`/project/${projectId}/chat?new`}
-              className="flex size-5 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              title="New chat"
+            <button
+              type="button"
+              onClick={() => void startNewConversation()}
+              disabled={isCreatingConversation}
+              className={cn(
+                "flex size-5 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+                isCreatingConversation && "cursor-wait opacity-60",
+              )}
+              title={isCreatingConversation ? "Creating chat" : "New chat"}
             >
               <Plus className="size-3.5" />
-            </Link>
+            </button>
           </div>
 
           <div className="flex min-h-0 flex-col gap-0.5 overflow-y-auto px-1 pr-1">
             {conversations.length === 0 ? (
-              <Link
-                href={`/project/${projectId}/chat?new`}
+              <button
+                type="button"
+                onClick={() => void startNewConversation()}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+                  "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
                   segment === "chat"
                     ? "bg-accent text-foreground"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  isCreatingConversation && "cursor-wait opacity-60",
                 )}
+                disabled={isCreatingConversation}
               >
                 <MessageSquare className="size-3.5 shrink-0" />
                 <span className="truncate">New chat</span>
-              </Link>
+              </button>
             ) : (
               conversations.map((c) => {
                 const isActive =
@@ -126,7 +151,6 @@ export function ProjectSidebar({
                         : "text-muted-foreground hover:bg-accent hover:text-foreground",
                     )}
                   >
-                    <MessageSquare className="size-3.5 shrink-0" />
                     <span className="truncate">
                       {c.title.length > 36 ? c.title.slice(0, 33) + "..." : c.title}
                     </span>

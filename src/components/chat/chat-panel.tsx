@@ -8,6 +8,7 @@ import {
 } from "ai";
 import type { LucideIcon } from "lucide-react";
 import {
+  Brain,
   BookOpen,
   ChevronDown,
   Eye,
@@ -24,12 +25,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { createProjectConversation } from "@/lib/chat-client";
 import { cn } from "@/lib/utils";
 
 const SUGGESTED_PROMPTS = [
@@ -102,6 +104,12 @@ function getMessageText(message: UIMessage) {
 
 function isToolPart(part: UIMessage["parts"][number]) {
   return part.type === "dynamic-tool" || part.type.startsWith("tool-");
+}
+
+function isReasoningPart(
+  part: UIMessage["parts"][number]
+): part is Extract<UIMessage["parts"][number], { type: "reasoning" }> {
+  return part.type === "reasoning";
 }
 
 type ToolPartInfo = {
@@ -219,16 +227,85 @@ function ToolCallBlock({ part }: { part: ToolPartInfo }) {
   );
 }
 
+function ReasoningBlock({
+  text,
+  isStreaming,
+}: {
+  text: string;
+  isStreaming: boolean;
+}) {
+  const [open, setOpen] = useState(isStreaming);
+
+  useEffect(() => {
+    if (isStreaming) {
+      setOpen(true);
+    }
+  }, [isStreaming]);
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border/70 bg-muted/35">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/60"
+      >
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border/80 bg-background/90">
+          {isStreaming ? (
+            <Loader2 className="size-3.5 animate-spin text-primary" />
+          ) : (
+            <Brain className="size-3.5 text-muted-foreground" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-mono text-xs text-foreground/75">reasoning</span>
+            <span className="text-sm font-medium text-foreground">Thinking summary</span>
+          </div>
+          <p className="truncate pt-0.5 text-xs text-muted-foreground">
+            {isStreaming ? "Streaming model reasoning..." : "Review how the model approached this answer."}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              "rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.18em]",
+              isStreaming
+                ? "border-primary/20 bg-primary/10 text-primary"
+                : "border-border bg-background text-muted-foreground"
+            )}
+          >
+            {isStreaming ? "Live" : "Ready"}
+          </span>
+          <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+        </div>
+      </button>
+      {open ? (
+        <div className="border-t border-border/70 px-3 py-3">
+          <pre className="max-h-64 overflow-auto rounded-xl border border-border/70 bg-background px-3 py-2 text-xs leading-6 whitespace-pre-wrap text-foreground/80">
+            {text}
+          </pre>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function AssistantMessage({
   message,
   showToolCalls,
+  showReasoning,
+  isStreaming,
   projectId,
 }: {
   message: UIMessage;
   showToolCalls: boolean;
+  showReasoning: boolean;
+  isStreaming: boolean;
   projectId: string;
 }) {
   const toolParts = message.parts.filter(isToolPart).map((part) => part as ToolPartInfo);
+  const reasoningParts = message.parts.filter(isReasoningPart);
+  const reasoningText = reasoningParts.map((part) => part.text).join("\n\n").trim();
 
   const editFileParts = toolParts.filter(
     (p) =>
@@ -246,6 +323,14 @@ function AssistantMessage({
           projectId={projectId}
         />
       ))}
+      {showReasoning && reasoningText ? (
+        <ReasoningBlock text={reasoningText} isStreaming={isStreaming} />
+      ) : null}
+      {!showReasoning && reasoningParts.length > 0 ? (
+        <div className="rounded-2xl border border-dashed border-border/80 bg-muted/25 px-3 py-2 text-xs text-muted-foreground">
+          Thinking hidden
+        </div>
+      ) : null}
       {showToolCalls ? toolParts.map((part, index) => <ToolCallBlock key={part.toolCallId ?? `${message.id}-tool-${index}`} part={part} />) : null}
       {!showToolCalls && toolParts.length > 0 ? (
         <div className="rounded-2xl border border-dashed border-border/80 bg-muted/25 px-3 py-2 text-xs text-muted-foreground">
@@ -321,17 +406,24 @@ export function ChatPanel({
   const router = useRouter();
   const [input, setInput] = useState("");
   const [showToolCalls, setShowToolCalls] = useState(false);
+  const [showReasoning, setShowReasoning] = useState(false);
+  const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const stableChatId = chatId ?? `${projectId}-new`;
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: "/api/chat",
+        body: { projectId, conversationId: chatId, showReasoning },
+      }),
+    [chatId, projectId, showReasoning]
+  );
 
   const { messages, sendMessage, status, error } = useChat({
     id: stableChatId,
     messages: initialMessages,
-    transport: new DefaultChatTransport({
-      api: "/api/chat",
-      body: { projectId, conversationId: chatId },
-    }),
+    transport,
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
     onFinish: () => {
       router.refresh();
@@ -370,8 +462,20 @@ export function ChatPanel({
     [isBusy, sendMessage]
   );
 
-  function startNewConversation() {
-    router.push(`/project/${projectId}/chat?new`);
+  async function startNewConversation() {
+    if (isCreatingConversation) return;
+
+    setIsCreatingConversation(true);
+
+    try {
+      const conversation = await createProjectConversation(projectId);
+      router.push(`/project/${projectId}/chat?c=${conversation.id}`);
+      router.refresh();
+    } catch (error) {
+      console.error("Failed to create conversation", error);
+    } finally {
+      setIsCreatingConversation(false);
+    }
   }
 
   return (
@@ -384,9 +488,21 @@ export function ChatPanel({
               type="button"
               variant="outline"
               size="sm"
-              onClick={startNewConversation}
+              onClick={() => void startNewConversation()}
+              disabled={isCreatingConversation}
             >
-              New chat
+              {isCreatingConversation ? <Loader2 data-icon="inline-start" className="animate-spin" /> : null}
+              {isCreatingConversation ? "Creating..." : "New chat"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowReasoning((current) => !current)}
+              aria-pressed={showReasoning}
+            >
+              {showReasoning ? <EyeOff data-icon="inline-start" /> : <Eye data-icon="inline-start" />}
+              {showReasoning ? "Hide thinking" : "Show thinking"}
             </Button>
             <Button
               type="button"
@@ -406,14 +522,15 @@ export function ChatPanel({
               <EmptyState isBusy={isBusy} onSuggestion={(prompt) => void submitText(prompt)} />
             ) : (
               <>
-                {messages.map((message) => {
+                {messages.map((message, index) => {
                   const userText = getMessageText(message);
+                  const isStreamingAssistantMessage =
+                    message.role === "assistant" &&
+                    index === messages.length - 1 &&
+                    isBusy;
 
                   return (
                     <article key={message.id} className={cn("flex flex-col gap-1.5", message.role === "user" ? "items-end" : "items-start")}>
-                      <p className="px-1 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-                        {message.role === "user" ? "You" : "Advisor"}
-                      </p>
                       <div
                         className={cn(
                           "max-w-[min(42rem,100%)] rounded-[1.75rem] px-4 py-3 shadow-sm",
@@ -425,7 +542,13 @@ export function ChatPanel({
                         {message.role === "user" ? (
                           <p className="whitespace-pre-wrap text-sm leading-7 text-primary-foreground">{userText}</p>
                         ) : (
-                          <AssistantMessage message={message} showToolCalls={showToolCalls} projectId={projectId} />
+                          <AssistantMessage
+                            message={message}
+                            showToolCalls={showToolCalls}
+                            showReasoning={showReasoning}
+                            isStreaming={isStreamingAssistantMessage}
+                            projectId={projectId}
+                          />
                         )}
                       </div>
                     </article>

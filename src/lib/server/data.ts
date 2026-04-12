@@ -14,9 +14,15 @@ import type {
 type ProjectAccess = {
   id: string;
   name: string;
+  description: string;
+  logo_url: string | null;
   owner_id: string;
   role: ProjectRole;
 };
+
+function normalizeProjectText(value: string | null | undefined) {
+  return typeof value === "string" ? value : "";
+}
 
 function flattenProjectAccess(
   row:
@@ -26,11 +32,15 @@ function flattenProjectAccess(
           | {
               id: string;
               name: string;
+              description: string;
+              logo_url: string | null;
               owner_id: string;
             }
           | {
               id: string;
               name: string;
+              description: string;
+              logo_url: string | null;
               owner_id: string;
             }[]
           | null;
@@ -46,7 +56,9 @@ function flattenProjectAccess(
 
   return {
     id: project.id,
-    name: project.name,
+    name: normalizeProjectText(project.name),
+    description: normalizeProjectText(project.description),
+    logo_url: project.logo_url,
     owner_id: project.owner_id,
     role: row.role,
   };
@@ -57,10 +69,10 @@ export const getAccessibleProjects = cache(async (): Promise<AccessibleProject[]
   const supabase = await createSupabaseServerClient();
   const [{ data: ownedProjects, error: ownedError }, { data: memberRows, error: memberError }] =
     await Promise.all([
-      supabase.from("projects").select("id,name,owner_id").eq("owner_id", user.id),
+      supabase.from("projects").select("id,name,description,logo_url,owner_id").eq("owner_id", user.id),
       supabase
         .from("project_members")
-        .select("role,project:projects!inner(id,name,owner_id)")
+        .select("role,project:projects!inner(id,name,description,logo_url,owner_id)")
         .eq("user_id", user.id),
     ]);
 
@@ -72,7 +84,9 @@ export const getAccessibleProjects = cache(async (): Promise<AccessibleProject[]
       project.id,
       {
         id: project.id,
-        name: project.name,
+        name: normalizeProjectText(project.name),
+        description: normalizeProjectText(project.description),
+        logo_url: project.logo_url ?? null,
         owner_id: project.owner_id,
         role: "owner" as const,
         is_owned: true,
@@ -102,7 +116,7 @@ export async function getProjectAccessForUser(userId: string, projectId: string)
   const supabase = await createSupabaseServerClient();
   const { data: ownedProject, error: ownedError } = await supabase
     .from("projects")
-    .select("id,name,owner_id")
+    .select("id,name,description,logo_url,owner_id")
     .eq("id", projectId)
     .eq("owner_id", userId)
     .maybeSingle();
@@ -112,7 +126,9 @@ export async function getProjectAccessForUser(userId: string, projectId: string)
   if (ownedProject) {
     return {
       id: ownedProject.id,
-      name: ownedProject.name,
+      name: normalizeProjectText(ownedProject.name),
+      description: normalizeProjectText(ownedProject.description),
+      logo_url: ownedProject.logo_url ?? null,
       owner_id: ownedProject.owner_id,
       role: "owner" as const,
       is_owned: true,
@@ -121,7 +137,7 @@ export async function getProjectAccessForUser(userId: string, projectId: string)
 
   const { data, error } = await supabase
     .from("project_members")
-    .select("role,project:projects!inner(id,name,owner_id)")
+    .select("role,project:projects!inner(id,name,description,logo_url,owner_id)")
     .eq("user_id", userId)
     .eq("project_id", projectId)
     .maybeSingle();

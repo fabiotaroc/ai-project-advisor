@@ -78,8 +78,7 @@ export async function listProjectConversations(projectId: string, userId: string
     .select("id,title,created_at")
     .eq("project_id", projectId)
     .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(20);
+    .order("created_at", { ascending: false });
 
   if (error) throw error;
   return (data ?? []) as { id: string; title: string; created_at: string }[];

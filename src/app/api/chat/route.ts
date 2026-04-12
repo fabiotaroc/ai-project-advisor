@@ -1,5 +1,5 @@
 import { consumeStream, embed, streamText, tool, convertToModelMessages, UIMessage } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { openai, type OpenAILanguageModelResponsesOptions } from "@ai-sdk/openai";
 import { z } from "zod";
 import { getOptionalSessionUser } from "@/lib/server/auth";
 import { getProjectAccessForUser } from "@/lib/server/data";
@@ -16,6 +16,7 @@ export const maxDuration = 60;
 const schema = z.object({
   projectId: z.string().uuid(),
   conversationId: z.string().uuid().optional(),
+  showReasoning: z.boolean().optional(),
   messages: z.array(z.custom<UIMessage>()),
 });
 
@@ -37,14 +38,22 @@ export async function POST(request: Request) {
   const admin = createSupabaseAdminClient();
   const system = await assembleProjectSystemPrompt(projectId, user.id);
   const conversation = await getOrCreateProjectConversation(projectId, user.id, body.conversationId, body.messages);
+  const showReasoning = body.showReasoning ?? false;
 
   const modelMessages = await convertToModelMessages(body.messages);
 
   const result = streamText({
-    model: openai("gpt-4.1-mini"),
+    model: openai("gpt-5.4"),
     system,
     messages: modelMessages,
     abortSignal: request.signal,
+    providerOptions: showReasoning
+      ? {
+          openai: {
+            reasoningSummary: "auto",
+          } satisfies OpenAILanguageModelResponsesOptions,
+        }
+      : undefined,
     tools: {
       list_files: tool({
         description: "List all project files with display metadata",
@@ -186,6 +195,7 @@ export async function POST(request: Request) {
   return result.toUIMessageStreamResponse({
     originalMessages: body.messages,
     consumeSseStream: consumeStream,
+    sendReasoning: showReasoning,
     onFinish: async ({ messages, isAborted }) => {
       if (isAborted) {
         return;

@@ -54,6 +54,8 @@ export type ProjectRole = "owner" | "editor" | "viewer";
 export type AccessibleProject = {
   id: string;
   name: string;
+  description: string;
+  logo_url: string | null;
   owner_id: string;
   role: ProjectRole;
   is_owned: boolean;

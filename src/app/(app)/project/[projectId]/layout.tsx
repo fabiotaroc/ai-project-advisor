@@ -30,7 +30,6 @@ export default async function ProjectLayout({
         <ProjectSidebar
           projectId={projectId}
           projectName={project.name}
-          projectRole={project.role}
           conversations={conversations}
         />
         <div className="min-w-0 flex-1 p-4">{children}</div>

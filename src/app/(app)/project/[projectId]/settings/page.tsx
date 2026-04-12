@@ -27,6 +27,9 @@ export default async function SettingsPage({
     <SettingsPanel
       projectId={projectId}
       projectRole={project.role}
+      projectName={project.name ?? ""}
+      projectDescription={project.description ?? ""}
+      projectLogoUrl={project.logo_url}
       initialSettings={settings}
       initialMembers={members}
       initialInvites={pendingInvites}

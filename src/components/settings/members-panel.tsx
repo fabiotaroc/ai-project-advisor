@@ -53,10 +53,13 @@ export type MemberData = {
   created_at: string;
 };
 
-function initials(name: string | null, email: string) {
-  if (name) {
-    return name
+function initials(name: string | null | undefined, email: string) {
+  const safeName = typeof name === "string" ? name.trim() : "";
+
+  if (safeName) {
+    return safeName
       .split(/\s+/)
+      .filter(Boolean)
       .slice(0, 2)
       .map((w) => w[0])
       .join("")
