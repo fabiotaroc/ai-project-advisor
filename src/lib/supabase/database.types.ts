@@ -45,7 +45,7 @@ export type Database = {
         }
         Relationships: []
       }
-      conversations: {
+      chats: {
         Row: {
           created_at: string
           id: string

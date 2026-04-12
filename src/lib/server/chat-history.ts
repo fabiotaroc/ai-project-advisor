@@ -84,7 +84,7 @@ function toUIMessage(record: MessageRecord): UIMessage {
 export async function listProjectConversations(projectId: string, userId: string) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
-    .from("conversations")
+    .from("chats")
     .select("id,title,created_at")
     .eq("project_id", projectId)
     .eq("user_id", userId)
@@ -97,7 +97,7 @@ export async function listProjectConversations(projectId: string, userId: string
 export async function getLatestConversation(projectId: string, userId: string) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
-    .from("conversations")
+    .from("chats")
     .select("id,project_id,user_id,title,created_at")
     .eq("project_id", projectId)
     .eq("user_id", userId)
@@ -115,7 +115,7 @@ export async function getLatestConversation(projectId: string, userId: string) {
 export async function getConversationForUser(conversationId: string, userId: string) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
-    .from("conversations")
+    .from("chats")
     .select("id,project_id,user_id,title,created_at")
     .eq("id", conversationId)
     .eq("user_id", userId)
@@ -135,7 +135,7 @@ export async function getConversationWithMessages(
 ) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
-    .from("conversations")
+    .from("chats")
     .select("id,project_id,user_id,title,created_at")
     .eq("id", conversationId)
     .eq("project_id", projectId)
@@ -191,7 +191,7 @@ export async function getLatestConversationWithMessages(projectId: string, userI
 export async function createConversation(projectId: string, userId: string, title = "New chat") {
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
-    .from("conversations")
+    .from("chats")
     .insert({ project_id: projectId, user_id: userId, title })
     .select("id,project_id,user_id,title,created_at")
     .single();
@@ -204,7 +204,7 @@ export async function renameConversation(conversationId: string, title: string) 
   const supabase = createSupabaseAdminClient();
   const trimmedTitle = title.trim();
   const { data, error } = await supabase
-    .from("conversations")
+    .from("chats")
     .update({ title: trimmedTitle })
     .eq("id", conversationId)
     .select("id,project_id,user_id,title,created_at")
@@ -227,7 +227,7 @@ export async function deleteConversation(conversationId: string) {
   }
 
   const { error: deleteConversationError } = await supabase
-    .from("conversations")
+    .from("chats")
     .delete()
     .eq("id", conversationId);
 
@@ -241,7 +241,7 @@ async function shouldAutoUpdateConversationTitle(conversationId: string) {
   const [{ data: conversation, error: conversationError }, { data: messages, error: messagesError }] =
     await Promise.all([
       supabase
-        .from("conversations")
+        .from("chats")
         .select("id,project_id,user_id,title,created_at")
         .eq("id", conversationId)
         .maybeSingle(),
@@ -280,7 +280,7 @@ export async function getOrCreateProjectConversation(
   if (conversationId) {
     const supabase = createSupabaseAdminClient();
     const { data } = await supabase
-      .from("conversations")
+      .from("chats")
       .select("id,project_id,user_id,title,created_at")
       .eq("id", conversationId)
       .eq("project_id", projectId)
@@ -325,7 +325,7 @@ export async function replaceConversationMessages(conversationId: string, messag
 
   if (shouldUpdateTitle) {
     const { error: updateError } = await supabase
-      .from("conversations")
+      .from("chats")
       .update({ title: getConversationTitle(messages) })
       .eq("id", conversationId);
 

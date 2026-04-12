@@ -35,7 +35,8 @@ alwaysApply: true
 
 - Supabase auth and data access use `@supabase/ssr` helpers in `src/lib/supabase/client.ts` and `src/lib/supabase/server.ts`.
 - Browser auth flows should use `createSupabaseBrowserClient()`. Server routes, loaders, and server utilities should use `await createSupabaseServerClient()`.
-- When database work is needed and the Supabase plugin is available, inspect schema first instead of guessing it.
+- Treat files in `supabase/migrations` as record-keeping, not source of truth for current schema state.
+- For Supabase migrations or schema modifications, inspect the live project with the Supabase plugin first (for example `list_projects`, `list_tables`, and targeted `execute_sql` introspection) before writing or applying SQL.
 - Prefer plugin reads like `list_tables` or `search_docs`; use `apply_migration` for DDL and reserve `execute_sql` for targeted data queries.
 
 ```ts
