@@ -21,6 +21,16 @@ type MessageRecord = {
   created_at: string;
 };
 
+function toConversationRecord(
+  data: ConversationRecord | ConversationRecord[] | null | undefined,
+): ConversationRecord | null {
+  if (!data) {
+    return null;
+  }
+
+  return Array.isArray(data) ? (data[0] ?? null) : data;
+}
+
 function getMessageText(message: UIMessage) {
   return message.parts
     .flatMap((part) => (part.type === "text" && part.text ? [part.text] : []))
@@ -102,6 +112,22 @@ export async function getLatestConversation(projectId: string, userId: string) {
   return (data as ConversationRecord | null) ?? null;
 }
 
+export async function getConversationForUser(conversationId: string, userId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("conversations")
+    .select("id,project_id,user_id,title,created_at")
+    .eq("id", conversationId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return toConversationRecord(data);
+}
+
 export async function getConversationWithMessages(
   projectId: string,
   userId: string,
@@ -174,6 +200,77 @@ export async function createConversation(projectId: string, userId: string, titl
   return data as ConversationRecord;
 }
 
+export async function renameConversation(conversationId: string, title: string) {
+  const supabase = createSupabaseAdminClient();
+  const trimmedTitle = title.trim();
+  const { data, error } = await supabase
+    .from("conversations")
+    .update({ title: trimmedTitle })
+    .eq("id", conversationId)
+    .select("id,project_id,user_id,title,created_at")
+    .single();
+
+  if (error) throw error;
+  return data as ConversationRecord;
+}
+
+export async function deleteConversation(conversationId: string) {
+  const supabase = createSupabaseAdminClient();
+
+  const { error: deleteMessagesError } = await supabase
+    .from("messages")
+    .delete()
+    .eq("conversation_id", conversationId);
+
+  if (deleteMessagesError) {
+    throw deleteMessagesError;
+  }
+
+  const { error: deleteConversationError } = await supabase
+    .from("conversations")
+    .delete()
+    .eq("id", conversationId);
+
+  if (deleteConversationError) {
+    throw deleteConversationError;
+  }
+}
+
+async function shouldAutoUpdateConversationTitle(conversationId: string) {
+  const supabase = createSupabaseAdminClient();
+  const [{ data: conversation, error: conversationError }, { data: messages, error: messagesError }] =
+    await Promise.all([
+      supabase
+        .from("conversations")
+        .select("id,project_id,user_id,title,created_at")
+        .eq("id", conversationId)
+        .maybeSingle(),
+      supabase
+        .from("messages")
+        .select("id,role,content,tool_calls,citations,created_at")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: true }),
+    ]);
+
+  if (conversationError) {
+    throw conversationError;
+  }
+
+  if (messagesError) {
+    throw messagesError;
+  }
+
+  const currentConversation = toConversationRecord(conversation);
+  const currentTitle = currentConversation?.title.trim() ?? "";
+
+  if (!currentTitle || currentTitle === "New conversation") {
+    return true;
+  }
+
+  const generatedTitle = getConversationTitle(((messages ?? []) as MessageRecord[]).map(toUIMessage));
+  return currentTitle === generatedTitle;
+}
+
 export async function getOrCreateProjectConversation(
   projectId: string,
   userId: string,
@@ -200,6 +297,7 @@ export async function getOrCreateProjectConversation(
 
 export async function replaceConversationMessages(conversationId: string, messages: UIMessage[]) {
   const supabase = createSupabaseAdminClient();
+  const shouldUpdateTitle = await shouldAutoUpdateConversationTitle(conversationId);
 
   const { error: deleteError } = await supabase.from("messages").delete().eq("conversation_id", conversationId);
 
@@ -225,12 +323,14 @@ export async function replaceConversationMessages(conversationId: string, messag
     }
   }
 
-  const { error: updateError } = await supabase
-    .from("conversations")
-    .update({ title: getConversationTitle(messages) })
-    .eq("id", conversationId);
+  if (shouldUpdateTitle) {
+    const { error: updateError } = await supabase
+      .from("conversations")
+      .update({ title: getConversationTitle(messages) })
+      .eq("id", conversationId);
 
-  if (updateError) {
-    throw updateError;
+    if (updateError) {
+      throw updateError;
+    }
   }
 }

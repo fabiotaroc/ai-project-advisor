@@ -20,12 +20,13 @@ import {
   MessageSquareQuote,
   Search,
   SendHorizontal,
-  Sparkles,
   Wrench,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -341,9 +342,43 @@ function AssistantMessage({
         if (part.type !== "text" || !part.text) return null;
 
         return (
-          <p key={`${message.id}-text-${index}`} className="whitespace-pre-wrap text-sm leading-7 text-foreground/95">
-            {part.text}
-          </p>
+          <div
+            key={`${message.id}-text-${index}`}
+            className={cn(
+              "text-sm text-foreground/95",
+              "[&_p]:whitespace-pre-wrap [&_p]:leading-7",
+              "[&_p:not(:first-child)]:mt-3",
+              "[&_strong]:font-semibold",
+              "[&_em]:italic",
+              "[&_h1]:mt-5 [&_h1]:text-lg [&_h1]:font-semibold [&_h1]:tracking-tight",
+              "[&_h2]:mt-4 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:tracking-tight",
+              "[&_h3]:mt-4 [&_h3]:text-sm [&_h3]:font-semibold",
+              "[&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6",
+              "[&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-6",
+              "[&_li]:mt-1 [&_li>p]:whitespace-normal",
+              "[&_a]:font-medium [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-4",
+              "[&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-border/70 [&_blockquote]:pl-4 [&_blockquote]:text-muted-foreground",
+              "[&_hr]:my-4 [&_hr]:border-border/70",
+              "[&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_table]:overflow-hidden [&_table]:rounded-lg",
+              "[&_th]:border-b [&_th]:border-border/70 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium",
+              "[&_td]:border-b [&_td]:border-border/40 [&_td]:px-3 [&_td]:py-2 [&_td]:align-top",
+              "[&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-border/70 [&_pre]:bg-muted/45 [&_pre]:px-4 [&_pre]:py-3",
+              "[&_code]:rounded-md [&_code]:bg-muted/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.9em]",
+              "[&_pre_code]:bg-transparent [&_pre_code]:p-0"
+            )}
+          >
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                a: ({ node, ...props }) => {
+                  void node;
+                  return <a {...props} rel="noreferrer" target="_blank" />;
+                },
+              }}
+            >
+              {part.text}
+            </ReactMarkdown>
+          </div>
         );
       })}
     </div>
@@ -359,13 +394,10 @@ function EmptyState({
 }) {
   return (
     <div className="flex h-full min-h-[28rem] flex-col items-center justify-center gap-6 px-4 text-center">
-      <div className="flex size-16 items-center justify-center rounded-full border border-border/80 bg-background shadow-sm">
-        <Sparkles className="size-7 text-primary" />
-      </div>
       <div className="max-w-2xl space-y-3">
-        <h2 className="font-heading text-3xl tracking-tight text-foreground">Ask the advisor to inspect the project before it answers.</h2>
+        <h2 className="font-heading text-3xl tracking-tight text-foreground">Ask anything about the project</h2>
         <p className="text-sm leading-7 text-muted-foreground">
-          It can look through project files, search uploaded source material, and update project documents when you ask for concrete changes.
+          Look through project files, search uploaded source material, and update project documents when you ask for concrete changes.
         </p>
       </div>
       <div className="grid w-full max-w-3xl gap-3 sm:grid-cols-2">
