@@ -32,7 +32,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { createProjectConversation } from "@/lib/chat-client";
 import { cn } from "@/lib/utils";
 
 const SUGGESTED_PROMPTS = [
@@ -439,7 +438,6 @@ export function ChatPanel({
   const [input, setInput] = useState("");
   const [showToolCalls, setShowToolCalls] = useState(false);
   const [showReasoning, setShowReasoning] = useState(false);
-  const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const stableChatId = chatId ?? `${projectId}-new`;
@@ -494,38 +492,12 @@ export function ChatPanel({
     [isBusy, sendMessage]
   );
 
-  async function startNewConversation() {
-    if (isCreatingConversation) return;
-
-    setIsCreatingConversation(true);
-
-    try {
-      const conversation = await createProjectConversation(projectId);
-      router.push(`/project/${projectId}/chat?c=${conversation.id}`);
-      router.refresh();
-    } catch (error) {
-      console.error("Failed to create conversation", error);
-    } finally {
-      setIsCreatingConversation(false);
-    }
-  }
-
   return (
     <section className="flex h-[calc(100vh-9.5rem)] min-h-[38rem] flex-col">
       <Card className="relative flex h-full min-h-0 border-border/70 bg-card/95 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.35)] supports-[backdrop-filter]:backdrop-blur">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-linear-to-b from-muted/45 via-muted/10 to-transparent" />
         <CardHeader className="relative !flex flex-row flex-wrap items-center justify-end gap-2 border-b border-border/70 bg-linear-to-br from-background via-background to-muted/40">
           <CardAction className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void startNewConversation()}
-              disabled={isCreatingConversation}
-            >
-              {isCreatingConversation ? <Loader2 data-icon="inline-start" className="animate-spin" /> : null}
-              {isCreatingConversation ? "Creating..." : "New chat"}
-            </Button>
             <Button
               type="button"
               variant="outline"
