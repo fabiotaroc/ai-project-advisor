@@ -17,6 +17,7 @@ import {
   Settings,
   Trash2,
 } from "lucide-react";
+import { SearchCommand } from "@/components/search/search-command";
 import {
   createProjectConversation,
   deleteProjectConversation,
@@ -44,7 +45,6 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 const primaryLinks = [
-  { key: "search", label: "Search", icon: Search },
   { key: "files", label: "Wiki", icon: Library },
   { key: "sources", label: "Sources", icon: BookOpen },
   { key: "activity", label: "Activity", icon: Activity },
@@ -87,6 +87,7 @@ export function ProjectSidebar({
   const [draftTitle, setDraftTitle] = useState("");
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const navigationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -106,6 +107,18 @@ export function ProjectSidebar({
         clearTimeout(navigationTimerRef.current);
       }
     };
+  }, []);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key === "k") {
+        event.preventDefault();
+        setSearchOpen((prev) => !prev);
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   function clearScheduledNavigation() {
@@ -332,6 +345,36 @@ export function ProjectSidebar({
               </>
             )}
           </div>
+
+          {/* Search trigger */}
+          {collapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => setSearchOpen(true)}
+                  className="flex size-8 items-center justify-center self-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <Search className="size-4 shrink-0" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Search &middot; ⌘K</TooltipContent>
+            </Tooltip>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className={cn(
+                "flex items-center gap-2.5 rounded-md border border-border bg-background/50 px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+              )}
+            >
+              <Search className="size-4 shrink-0" />
+              <span className="flex-1 text-left">Search</span>
+              <kbd className="pointer-events-none flex h-5 items-center gap-0.5 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                <span className="text-xs">⌘</span>K
+              </kbd>
+            </button>
+          )}
 
           {/* Primary nav links */}
           <nav className="flex flex-col gap-0.5">
@@ -566,6 +609,8 @@ export function ProjectSidebar({
         </div>
 
       </aside>
+
+      <SearchCommand open={searchOpen} onOpenChange={setSearchOpen} />
     </TooltipProvider>
   );
 }
