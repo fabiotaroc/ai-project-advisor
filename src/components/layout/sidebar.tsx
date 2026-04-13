@@ -6,9 +6,9 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   Activity,
   BookOpen,
-  BookText,
+  ChevronsLeft,
+  ChevronsRight,
   FolderOpen,
-  LayoutDashboard,
   Library,
   Loader2,
   MessageSquare,
@@ -34,17 +34,20 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-const projectLinks = [
-  { key: "overview", label: "Overview", icon: LayoutDashboard },
-  { key: "files", label: "Wiki", icon: Library },
-  { key: "glossary", label: "Glossary", icon: BookText },
-  { key: "sources", label: "Sources", icon: BookOpen },
+const primaryLinks = [
   { key: "search", label: "Search", icon: Search },
+  { key: "files", label: "Wiki", icon: Library },
+  { key: "sources", label: "Sources", icon: BookOpen },
   { key: "activity", label: "Activity", icon: Activity },
-  { key: "settings", label: "Settings", icon: Settings },
 ] as const;
 
 type ConversationSummary = {
@@ -57,6 +60,12 @@ const CONVERSATION_NAVIGATION_DELAY_MS = 180;
 
 function truncateConversationTitle(title: string) {
   return title.length > 36 ? `${title.slice(0, 33)}...` : title;
+}
+
+function getConversationInitial(title: string) {
+  const trimmed = title.trim();
+  if (!trimmed) return "?";
+  return trimmed[0].toUpperCase();
 }
 
 export function ProjectSidebar({
@@ -77,6 +86,7 @@ export function ProjectSidebar({
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
   const navigationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -220,185 +230,342 @@ export function ProjectSidebar({
     }
   }
 
+  function renderNavLink(
+    { key, label, icon: Icon }: { key: string; label: string; icon: React.ComponentType<{ className?: string }> },
+  ) {
+    const href = `/project/${projectId}/${key}`;
+    const active = segment === key;
+
+    const linkContent = (
+      <Link
+        href={href}
+        className={cn(
+          "flex items-center rounded-md transition-colors",
+          collapsed ? "justify-center p-2" : "gap-2.5 px-2.5 py-1.5",
+          active
+            ? "bg-primary text-primary-foreground"
+            : "text-muted-foreground hover:bg-accent hover:text-foreground",
+        )}
+      >
+        <Icon className="size-4 shrink-0" />
+        {!collapsed && <span className="text-sm">{label}</span>}
+      </Link>
+    );
+
+    if (collapsed) {
+      return (
+        <Tooltip key={key}>
+          <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
+          <TooltipContent side="right">{label}</TooltipContent>
+        </Tooltip>
+      );
+    }
+
+    return <div key={key}>{linkContent}</div>;
+  }
+
   return (
-    <aside className="flex min-h-0 w-72 shrink-0 flex-col gap-4 border-r border-border bg-sidebar p-4">
-      <div className="flex min-h-0 flex-1 flex-col gap-4">
-        <div className="mb-1 flex items-center gap-2.5 px-2">
-          <FolderOpen className="size-4 text-muted-foreground" />
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-foreground">{projectName}</h2>
-          </div>
-        </div>
-
-        <nav className="flex flex-col gap-0.5">
-          {projectLinks.map(({ key, label, icon: Icon }) => {
-            const href = `/project/${projectId}/${key}`;
-            const active = segment === key;
-            return (
-              <Link
-                key={key}
-                href={href}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors",
-                  active
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                )}
-              >
-                <Icon className="size-4" />
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="flex min-h-0 flex-1 flex-col gap-2">
-          <div className="flex items-center justify-between px-2">
-            <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
-              Chats
-            </p>
-            <button
-              type="button"
-              onClick={() => void startNewConversation()}
-              disabled={isCreatingConversation}
-              className={cn(
-                "flex size-5 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                isCreatingConversation && "cursor-wait opacity-60",
-              )}
-              title={isCreatingConversation ? "Creating chat" : "New chat"}
-            >
-              <Plus className="size-3.5" />
-            </button>
-          </div>
-
-          <div className="flex min-h-0 flex-col gap-0.5 overflow-y-auto px-1 pr-1">
-            {conversationItems.length === 0 ? (
-              <button
-                type="button"
-                onClick={() => void startNewConversation()}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
-                  segment === "chat"
-                    ? "bg-accent text-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                  isCreatingConversation && "cursor-wait opacity-60",
-                )}
-                disabled={isCreatingConversation}
-              >
-                <MessageSquare className="size-3.5 shrink-0" />
-                <span className="truncate">New chat</span>
-              </button>
+    <TooltipProvider delayDuration={0}>
+      <aside
+        className={cn(
+          "flex min-h-0 shrink-0 flex-col border-r border-border bg-sidebar transition-[width] duration-200",
+          collapsed ? "w-14" : "w-72",
+        )}
+      >
+        <div className="flex min-h-0 flex-1 flex-col gap-4 p-2">
+          {/* Project header (links to settings) + collapse toggle */}
+          <div className={cn(
+            "flex items-center",
+            collapsed ? "flex-col gap-1 py-1" : "justify-between gap-2 px-2 py-1",
+          )}>
+            {collapsed ? (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href={`/project/${projectId}/settings`}
+                      className={cn(
+                        "flex size-8 items-center justify-center rounded-md transition-colors",
+                        segment === "settings"
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                      )}
+                    >
+                      <Settings className="size-4" />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">{projectName} — Settings</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setCollapsed(false)}
+                      className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      <ChevronsRight className="size-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">Expand sidebar</TooltipContent>
+                </Tooltip>
+              </>
             ) : (
-              conversationItems.map((c) => {
-                const isActive =
-                  segment === "chat" &&
-                  (activeConversationId === c.id ||
-                    (!activeConversationId && c.id === conversationItems[0]?.id));
-                const isEditing = editingConversationId === c.id;
-                const isPending = pendingConversationId === c.id;
+              <>
+                <Link
+                  href={`/project/${projectId}/settings`}
+                  className={cn(
+                    "group/project flex min-w-0 items-center gap-2.5 rounded-md px-1 py-0.5 transition-colors hover:bg-accent",
+                    segment === "settings" && "bg-accent",
+                  )}
+                >
+                  <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
+                  <h2 className="truncate text-sm font-semibold text-foreground">{projectName}</h2>
+                  <Settings className="size-3 shrink-0 text-muted-foreground/0 transition-colors group-hover/project:text-muted-foreground" />
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setCollapsed(true)}
+                  className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <ChevronsLeft className="size-3.5" />
+                </button>
+              </>
+            )}
+          </div>
 
-                return (
-                  <div
-                    key={c.id}
-                    className={cn("group/conversation relative", isPending && "opacity-70")}
-                  >
-                    {isEditing ? (
-                      <form onSubmit={(event) => handleRenameSubmit(event, c)}>
-                        <Input
-                          autoFocus
-                          value={draftTitle}
-                          onChange={(event) => setDraftTitle(event.target.value)}
-                          onBlur={() => {
-                            if (isPending) return;
-                            void submitConversationRename(c);
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === "Escape") {
-                              event.preventDefault();
-                              cancelRenamingConversation();
-                            }
-                          }}
-                          disabled={isPending}
-                          className={cn(
-                            "h-9 rounded-lg border-border/70 bg-background/90 pr-10 text-sm shadow-none",
-                            isActive && "border-accent-foreground/15 bg-accent",
-                          )}
-                        />
-                      </form>
-                    ) : (
-                      <>
+          {/* Primary nav links */}
+          <nav className="flex flex-col gap-0.5">
+            {primaryLinks.map((link) => renderNavLink(link))}
+          </nav>
+
+          {/* Chats section */}
+          <div className="flex min-h-0 flex-1 flex-col gap-2">
+            {collapsed ? (
+              <>
+                {/* Collapsed: new-chat button + initial badges */}
+                <div className="flex flex-col items-center gap-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => void startNewConversation()}
+                        disabled={isCreatingConversation}
+                        className={cn(
+                          "flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+                          isCreatingConversation && "cursor-wait opacity-60",
+                        )}
+                      >
+                        <Plus className="size-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">New chat</TooltipContent>
+                  </Tooltip>
+                </div>
+
+                <div className="flex min-h-0 flex-col items-center gap-1 overflow-y-auto">
+                  {conversationItems.length === 0 ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
                         <button
                           type="button"
-                          onClick={() => scheduleConversationNavigation(c.id)}
-                          disabled={isPending}
+                          onClick={() => void startNewConversation()}
+                          disabled={isCreatingConversation}
                           className={cn(
-                            "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 pr-10 text-left text-sm transition-colors",
-                            isActive
+                            "flex size-8 items-center justify-center rounded-md text-xs font-medium transition-colors",
+                            segment === "chat"
                               ? "bg-accent text-foreground"
                               : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                            isCreatingConversation && "cursor-wait opacity-60",
                           )}
                         >
-                          <span
-                            className="truncate"
-                            title={c.title}
-                            onDoubleClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              startRenamingConversation(c);
-                            }}
-                          >
-                            {truncateConversationTitle(c.title)}
-                          </span>
+                          <MessageSquare className="size-3.5" />
                         </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">New chat</TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    conversationItems.map((c) => {
+                      const isActive =
+                        segment === "chat" &&
+                        (activeConversationId === c.id ||
+                          (!activeConversationId && c.id === conversationItems[0]?.id));
 
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
+                      return (
+                        <Tooltip key={c.id}>
+                          <TooltipTrigger asChild>
                             <button
                               type="button"
-                              onClick={(event) => event.stopPropagation()}
-                              disabled={isPending}
+                              onClick={() => scheduleConversationNavigation(c.id)}
                               className={cn(
-                                "absolute top-1/2 right-1.5 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-background/90 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 group-hover/conversation:opacity-100",
-                                isActive && "hover:bg-background",
-                                isPending && "opacity-100",
+                                "flex size-8 items-center justify-center rounded-md text-xs font-semibold transition-colors",
+                                isActive
+                                  ? "bg-accent text-foreground"
+                                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
                               )}
-                              title="Delete chat"
                             >
-                              {isPending ? (
-                                <Loader2 className="size-3.5 animate-spin" />
-                              ) : (
-                                <Trash2 className="size-3.5" />
-                              )}
+                              {getConversationInitial(c.title)}
                             </button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent size="sm">
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete chat?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Remove <strong>{c.title}</strong> from your chat history? This cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                variant="destructive"
-                                disabled={isPending}
-                                onClick={() => void handleDeleteConversation(c.id, isActive)}
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </>
+                          </TooltipTrigger>
+                          <TooltipContent side="right">{c.title}</TooltipContent>
+                        </Tooltip>
+                      );
+                    })
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Expanded: full chat list */}
+                <div className="flex items-center justify-between px-2">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
+                    Chats
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void startNewConversation()}
+                    disabled={isCreatingConversation}
+                    className={cn(
+                      "flex size-5 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+                      isCreatingConversation && "cursor-wait opacity-60",
                     )}
-                  </div>
-                );
-              })
+                    title={isCreatingConversation ? "Creating chat" : "New chat"}
+                  >
+                    <Plus className="size-3.5" />
+                  </button>
+                </div>
+
+                <div className="flex min-h-0 flex-col gap-0.5 overflow-y-auto px-1 pr-1">
+                  {conversationItems.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => void startNewConversation()}
+                      className={cn(
+                        "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
+                        segment === "chat"
+                          ? "bg-accent text-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                        isCreatingConversation && "cursor-wait opacity-60",
+                      )}
+                      disabled={isCreatingConversation}
+                    >
+                      <MessageSquare className="size-3.5 shrink-0" />
+                      <span className="truncate">New chat</span>
+                    </button>
+                  ) : (
+                    conversationItems.map((c) => {
+                      const isActive =
+                        segment === "chat" &&
+                        (activeConversationId === c.id ||
+                          (!activeConversationId && c.id === conversationItems[0]?.id));
+                      const isEditing = editingConversationId === c.id;
+                      const isPending = pendingConversationId === c.id;
+
+                      return (
+                        <div
+                          key={c.id}
+                          className={cn("group/conversation relative", isPending && "opacity-70")}
+                        >
+                          {isEditing ? (
+                            <form onSubmit={(event) => handleRenameSubmit(event, c)}>
+                              <Input
+                                autoFocus
+                                value={draftTitle}
+                                onChange={(event) => setDraftTitle(event.target.value)}
+                                onBlur={() => {
+                                  if (isPending) return;
+                                  void submitConversationRename(c);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Escape") {
+                                    event.preventDefault();
+                                    cancelRenamingConversation();
+                                  }
+                                }}
+                                disabled={isPending}
+                                className={cn(
+                                  "h-9 rounded-lg border-border/70 bg-background/90 pr-10 text-sm shadow-none",
+                                  isActive && "border-accent-foreground/15 bg-accent",
+                                )}
+                              />
+                            </form>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => scheduleConversationNavigation(c.id)}
+                                disabled={isPending}
+                                className={cn(
+                                  "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 pr-10 text-left text-sm transition-colors",
+                                  isActive
+                                    ? "bg-accent text-foreground"
+                                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                                )}
+                              >
+                                <span
+                                  className="truncate"
+                                  title={c.title}
+                                  onDoubleClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    startRenamingConversation(c);
+                                  }}
+                                >
+                                  {truncateConversationTitle(c.title)}
+                                </span>
+                              </button>
+
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <button
+                                    type="button"
+                                    onClick={(event) => event.stopPropagation()}
+                                    disabled={isPending}
+                                    className={cn(
+                                      "absolute top-1/2 right-1.5 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-background/90 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 group-hover/conversation:opacity-100",
+                                      isActive && "hover:bg-background",
+                                      isPending && "opacity-100",
+                                    )}
+                                    title="Delete chat"
+                                  >
+                                    {isPending ? (
+                                      <Loader2 className="size-3.5 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="size-3.5" />
+                                    )}
+                                  </button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent size="sm">
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete chat?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Remove <strong>{c.title}</strong> from your chat history? This cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      variant="destructive"
+                                      disabled={isPending}
+                                      onClick={() => void handleDeleteConversation(c.id, isActive)}
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>
-      </div>
-    </aside>
+
+      </aside>
+    </TooltipProvider>
   );
 }
