@@ -61,6 +61,17 @@ export type AccessibleProject = {
   is_owned: boolean;
 };
 
+export type ProjectSummary = AccessibleProject & {
+  sources_count: number;
+  sources_processing: number;
+  sources_failed: number;
+  members_count: number;
+  last_activity_at: string | null;
+  last_activity_summary: string | null;
+  client_name: string | null;
+  project_phase: string | null;
+};
+
 export type ProjectInviteRole = Exclude<ProjectRole, "owner">;
 
 export type GlossaryEntry = {

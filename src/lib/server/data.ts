@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { getSessionUser } from "@/lib/server/auth";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   AccessibleProject,
@@ -8,6 +9,7 @@ import type {
   ProjectFile,
   ProjectRole,
   ProjectSettings,
+  ProjectSummary,
   SourceMaterial,
 } from "@/lib/types";
 
@@ -223,3 +225,89 @@ export async function getActivity(projectId: string) {
   if (error) throw error;
   return (data ?? []) as ActivityEvent[];
 }
+
+export const getAccessibleProjectsSummary = cache(async (): Promise<ProjectSummary[]> => {
+  const projects = await getAccessibleProjects();
+  if (projects.length === 0) return [];
+
+  const ids = projects.map((project) => project.id);
+  const supabase = await createSupabaseServerClient();
+  const admin = createSupabaseAdminClient();
+
+  const [sourcesResult, activityResult, settingsResult, membersResult] = await Promise.all([
+    supabase
+      .from("source_materials")
+      .select("project_id,status")
+      .in("project_id", ids),
+    supabase
+      .from("activity_events")
+      .select("project_id,summary,created_at")
+      .in("project_id", ids)
+      .order("created_at", { ascending: false })
+      .limit(500),
+    supabase
+      .from("project_settings")
+      .select("project_id,client_name,project_phase")
+      .in("project_id", ids),
+    admin
+      .from("project_members")
+      .select("project_id,user_id")
+      .in("project_id", ids),
+  ]);
+
+  if (sourcesResult.error) throw sourcesResult.error;
+  if (activityResult.error) throw activityResult.error;
+  if (settingsResult.error) throw settingsResult.error;
+  if (membersResult.error) throw membersResult.error;
+
+  const sourceStats = new Map<string, { total: number; processing: number; failed: number }>();
+  for (const row of sourcesResult.data ?? []) {
+    const stats = sourceStats.get(row.project_id) ?? { total: 0, processing: 0, failed: 0 };
+    stats.total += 1;
+    if (row.status === "processing") stats.processing += 1;
+    if (row.status === "failed") stats.failed += 1;
+    sourceStats.set(row.project_id, stats);
+  }
+
+  const lastActivity = new Map<string, { created_at: string; summary: string }>();
+  for (const row of activityResult.data ?? []) {
+    if (!lastActivity.has(row.project_id)) {
+      lastActivity.set(row.project_id, { created_at: row.created_at, summary: row.summary });
+    }
+  }
+
+  const settingsById = new Map<string, { client_name: string | null; project_phase: string | null }>();
+  for (const row of settingsResult.data ?? []) {
+    settingsById.set(row.project_id, {
+      client_name: row.client_name ?? null,
+      project_phase: row.project_phase ?? null,
+    });
+  }
+
+  const memberIdsByProject = new Map<string, Set<string>>();
+  for (const row of membersResult.data ?? []) {
+    const set = memberIdsByProject.get(row.project_id) ?? new Set<string>();
+    set.add(row.user_id);
+    memberIdsByProject.set(row.project_id, set);
+  }
+
+  return projects.map((project) => {
+    const stats = sourceStats.get(project.id) ?? { total: 0, processing: 0, failed: 0 };
+    const activity = lastActivity.get(project.id) ?? null;
+    const settings = settingsById.get(project.id) ?? null;
+    const memberSet = memberIdsByProject.get(project.id) ?? new Set<string>();
+    memberSet.add(project.owner_id);
+
+    return {
+      ...project,
+      sources_count: stats.total,
+      sources_processing: stats.processing,
+      sources_failed: stats.failed,
+      members_count: memberSet.size,
+      last_activity_at: activity?.created_at ?? null,
+      last_activity_summary: activity?.summary ?? null,
+      client_name: settings?.client_name ?? null,
+      project_phase: settings?.project_phase ?? null,
+    } satisfies ProjectSummary;
+  });
+});
