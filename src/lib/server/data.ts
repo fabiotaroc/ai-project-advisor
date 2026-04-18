@@ -177,6 +177,7 @@ export async function getProjectFiles(projectId: string) {
     .from("project_files")
     .select("*")
     .eq("project_id", projectId)
+    .is("deleted_at", null)
     .order("path", { ascending: true });
 
   if (error) throw error;

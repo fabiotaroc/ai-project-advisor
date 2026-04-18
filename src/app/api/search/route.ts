@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
       .from("project_files")
       .select("id,path,content")
       .eq("project_id", body.projectId)
+      .is("deleted_at", null)
       .textSearch("content", body.query, { type: "plain" })
       .limit(10),
 

@@ -20,11 +20,13 @@ export async function assembleProjectSystemPrompt(projectId: string, userId: str
       .from("project_files")
       .select("path,content")
       .eq("project_id", projectId)
-      .in("path", ["index.md", "glossary.md", "PROJECT.md", "WORK.md", "PRODUCT.md"]),
+      .is("deleted_at", null)
+      .in("path", ["index.md", "log.md", "glossary.md", "PROJECT.md", "WORK.md", "PRODUCT.md"]),
     supabase
       .from("project_files")
       .select("path,content")
       .eq("project_id", projectId)
+      .is("deleted_at", null)
       .like("path", "memory/%")
       .order("created_at", { ascending: false })
       .limit(3),
@@ -36,7 +38,10 @@ export async function assembleProjectSystemPrompt(projectId: string, userId: str
   const parts: string[] = [];
 
   parts.push(
-    "You are an AI project advisor for non-technical users. You help manage and synthesize knowledge about their project. Keep responses concrete, helpful, and action-oriented. When you learn important information during a conversation, proactively update the relevant wiki files.",
+    [
+      "You are an AI project advisor for non-technical users. You help manage and synthesize knowledge about their project. Keep responses concrete, helpful, and action-oriented.",
+      "Focus on answering the user well in-conversation. A separate background Librarian agent owns wiki curation: it maintains index.md and log.md, synthesizes ingested sources, keeps memory entries, proposes lints, and decides when chat syntheses deserve their own page. Do not try to replicate its job — when the user asks to 'lint the wiki', 'curate', 'audit', or 'check wiki health', call the `trigger_wiki_lint` tool (optionally with a `focus` string capturing what they specifically want checked), then tell them the lint is running and its results will appear in log.md and the activity feed.",
+    ].join(" "),
   );
 
   parts.push(`# Project: ${project?.name ?? "Unknown"}`);
@@ -77,22 +82,11 @@ export async function assembleProjectSystemPrompt(projectId: string, userId: str
       "# Available Tools",
       "- list_files — list all project files with display metadata (pinned, visibility, locked, source of truth)",
       "- read_file — read a project file by path",
-      "- edit_file — create or update a project file (locked files will be rejected)",
+      "- edit_file — create or update a project file (locked files will be rejected). The Librarian keeps index.md and log.md in sync; focus your edits on content pages.",
       "- search_sources — semantic search across ingested source material chunks",
       "- read_source — read the full content of an ingested source material",
+      "- trigger_wiki_lint — kick off a background Librarian health-check run (stale content, contradictions, orphans, missing entity pages, index gaps). Accepts an optional focus string. Use this whenever the user asks to lint/curate/audit/check the wiki; do not attempt to perform the lint yourself.",
       "- Only call read_source with a sourceMaterialId returned by search_sources. If search_sources returns no results, do not call read_source.",
-      "",
-      "# Wiki Lint",
-      'When the user asks to "lint the wiki", "check wiki health", or "audit the project files", perform a systematic health check:',
-      "1. Read index.md and list_files to understand what exists",
-      "2. Read key files and check for:",
-      "   - Stale content: outdated dates, deadlines, or statuses",
-      "   - Contradictions: conflicting claims across files",
-      "   - Orphan pages: files with no inbound references from other files",
-      "   - Missing entity pages: people/clients/systems mentioned frequently but lacking a dedicated page",
-      "   - Index gaps: files present in the project but missing from index.md",
-      "3. Report findings as a structured list with severity (info/warning/issue)",
-      "4. Based on project settings, either propose fixes or make them directly",
     ].join("\n"),
   );
 

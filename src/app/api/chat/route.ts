@@ -1,4 +1,5 @@
 import { consumeStream, embed, streamText, tool, convertToModelMessages, UIMessage } from "ai";
+import { after } from "next/server";
 import { openai, type OpenAILanguageModelResponsesOptions } from "@ai-sdk/openai";
 import { z } from "zod";
 import { getOptionalSessionUser } from "@/lib/server/auth";
@@ -9,13 +10,14 @@ import {
 } from "@/lib/server/chat-history";
 import { assembleProjectSystemPrompt } from "@/lib/server/chat-context";
 import { editProjectFile } from "@/lib/server/project-files";
-import { generateConversationMemory } from "@/lib/server/memory";
+import {
+  triggerOnConversationEnded,
+  triggerWikiLint,
+} from "@/lib/server/librarian/triggers";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-const MEMORY_TOKEN_THRESHOLD = 800_000;
-
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const schema = z.object({
   projectId: z.string().uuid(),
@@ -65,6 +67,7 @@ export async function POST(request: Request) {
             .from("project_files")
             .select("path,pinned,visibility,locked,is_source_of_truth,created_by_agent,updated_at")
             .eq("project_id", projectId)
+            .is("deleted_at", null)
             .order("path", { ascending: true });
           if (error) throw error;
           return data ?? [];
@@ -79,13 +82,15 @@ export async function POST(request: Request) {
             .select("path,content,pinned,locked,is_source_of_truth,updated_at")
             .eq("project_id", projectId)
             .eq("path", path)
+            .is("deleted_at", null)
             .maybeSingle();
           if (error) throw error;
           return data;
         },
       }),
       edit_file: tool({
-        description: "Create or update a project file by path. Locked files cannot be edited.",
+        description:
+          "Create or update a project file by path. Locked files cannot be edited. The Librarian agent maintains the wiki catalog (index.md) and activity log (log.md) after each chat turn, so do not try to keep them in sync yourself.",
         inputSchema: z.object({ path: z.string().min(1), content: z.string() }),
         execute: async ({ path, content }) => {
           if (!canWrite) {
@@ -94,7 +99,7 @@ export async function POST(request: Request) {
 
           const { data: existing } = await admin
             .from("project_files")
-            .select("id,locked")
+            .select("id,locked,deleted_at")
             .eq("project_id", projectId)
             .eq("path", path)
             .maybeSingle();
@@ -103,7 +108,7 @@ export async function POST(request: Request) {
             return { error: `File "${path}" is locked and cannot be edited by the agent.` };
           }
 
-          const isNewFile = !existing;
+          const isNewFile = !existing || Boolean(existing.deleted_at);
 
           const file = await editProjectFile({
             projectId,
@@ -112,24 +117,6 @@ export async function POST(request: Request) {
             userId: user.id,
             createdByAgent: isNewFile,
           });
-
-          if (isNewFile && path !== "index.md") {
-            const { data: indexFile } = await admin
-              .from("project_files")
-              .select("id,content")
-              .eq("project_id", projectId)
-              .eq("path", "index.md")
-              .maybeSingle();
-
-            if (indexFile) {
-              await admin
-                .from("project_files")
-                .update({
-                  content: indexFile.content.trimEnd() + `\n- ${path} — (summary pending)\n`,
-                })
-                .eq("id", indexFile.id);
-            }
-          }
 
           await admin.from("activity_events").insert({
             project_id: projectId,
@@ -201,27 +188,45 @@ export async function POST(request: Request) {
           return data;
         },
       }),
-    },
-    onFinish: async ({ totalUsage }) => {
-      if ((totalUsage.totalTokens ?? 0) < MEMORY_TOKEN_THRESHOLD) return;
-
-      try {
-        const allMessages = body.messages.map((m) => ({
-          role: m.role,
-          content: m.parts
-            .flatMap((p) => (p.type === "text" && p.text ? [p.text] : []))
-            .join("\n\n"),
-        }));
-
-        await generateConversationMemory({
-          projectId,
-          userId: user.id,
-          conversationTitle: conversation.title,
-          messages: allMessages,
-        });
-      } catch (err) {
-        console.error("Auto memory generation failed", err);
-      }
+      trigger_wiki_lint: tool({
+        description:
+          "Kick off a background Librarian run that performs a wiki health check (stale content, contradictions, orphan pages, missing entity pages, index gaps). Use this whenever the user asks to lint, curate, audit, or health-check the wiki. The lint runs asynchronously in the background; tell the user it's running and they'll see the results shortly in the Files view and activity feed. Do not try to perform the lint yourself.",
+        inputSchema: z.object({
+          focus: z
+            .string()
+            .min(1)
+            .max(500)
+            .optional()
+            .describe(
+              "Optional: a specific area or concern the user wants checked (e.g. 'decisions.md', 'stakeholder pages', 'outdated dates').",
+            ),
+        }),
+        execute: async ({ focus }) => {
+          if (!canWrite) {
+            return {
+              error:
+                "You have viewer access to this project. Librarian runs require write access.",
+            };
+          }
+          after(async () => {
+            try {
+              await triggerWikiLint({
+                projectId,
+                userId: user.id,
+                userFocus: focus,
+              });
+            } catch (err) {
+              console.error("Chat-triggered wiki lint failed", err);
+            }
+          });
+          return {
+            started: true,
+            focus: focus ?? null,
+            message:
+              "Wiki lint started in the background. It typically finishes within a minute — the Librarian will update log.md and post an activity event with its findings and suggestions.",
+          };
+        },
+      }),
     },
   });
 
@@ -239,6 +244,18 @@ export async function POST(request: Request) {
       } catch (error) {
         console.error("Failed to persist conversation history", error);
       }
+
+      after(async () => {
+        try {
+          await triggerOnConversationEnded({
+            projectId,
+            userId: user.id,
+            conversationId: conversation.id,
+          });
+        } catch (err) {
+          console.error("Librarian trigger on conversation end failed", err);
+        }
+      });
     },
   });
 }

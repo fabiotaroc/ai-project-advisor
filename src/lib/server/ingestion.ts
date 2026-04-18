@@ -3,8 +3,6 @@ import "server-only";
 import { embed, generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { editProjectFile } from "@/lib/server/project-files";
-import { appendMemoryEntry } from "@/lib/server/memory";
 
 const CHUNK_SIZE = 1200;
 const CHUNK_OVERLAP = 200;
@@ -106,7 +104,7 @@ export async function generateSourceSummary(
   const snippet = text.slice(0, 6000);
 
   const { text: summary } = await generateText({
-    model: openai("gpt-4.1-mini"),
+    model: openai("gpt-5.4-mini"),
     system:
       "You are a concise summarizer. Produce a 2-4 sentence summary of the document. Focus on the key facts, decisions, and action items.",
     prompt: `Document title: ${title}\n\n${snippet}`,
@@ -116,6 +114,11 @@ export async function generateSourceSummary(
   return summary;
 }
 
+/**
+ * Perform the deterministic part of source ingestion: extract text, chunk,
+ * embed, and store a summary. Wiki synthesis is handled separately by the
+ * Librarian agent (see src/lib/server/librarian/triggers.ts).
+ */
 export async function ingestSourceMaterial({
   sourceId,
   projectId,
@@ -170,120 +173,9 @@ export async function ingestSourceMaterial({
       target_type: "source_material",
       target_id: sourceId,
     });
-
-    await runWikiSynthesis({ projectId, userId, title, summary, text });
   } catch (error) {
     console.error("Ingestion failed for source", sourceId, error);
     await admin.from("source_materials").update({ status: "failed" }).eq("id", sourceId);
     throw error;
-  }
-}
-
-async function runWikiSynthesis({
-  projectId,
-  userId,
-  title,
-  summary,
-  text,
-}: {
-  projectId: string;
-  userId: string;
-  title: string;
-  summary: string;
-  text: string;
-}) {
-  const admin = createSupabaseAdminClient();
-
-  const { data: settings } = await admin
-    .from("project_settings")
-    .select("auto_synthesize_on_ingest")
-    .eq("project_id", projectId)
-    .maybeSingle();
-
-  if (!settings?.auto_synthesize_on_ingest) return;
-
-  const snippet = text.slice(0, 4000);
-  const today = new Date().toISOString().split("T")[0];
-
-  const { text: synthesisOutput } = await generateText({
-    model: openai("gpt-4.1-mini"),
-    system: [
-      "You are a project wiki synthesis agent. Given a newly ingested source document, produce structured output for the project wiki.",
-      "Return a JSON object with these optional fields:",
-      '- "decisions": array of decision strings extracted from the source (only if there are clear decisions)',
-      '- "memory_entry": a short paragraph summarizing what was ingested and what it contributes to the project',
-      '- "index_entry": a one-line summary of this source suitable for the wiki index',
-      "Return valid JSON only. Omit fields if not applicable.",
-    ].join("\n"),
-    prompt: `Source title: ${title}\nSummary: ${summary}\n\nContent excerpt:\n${snippet}`,
-    maxOutputTokens: 800,
-  });
-
-  let synthesis: {
-    decisions?: string[];
-    memory_entry?: string;
-    index_entry?: string;
-  } = {};
-
-  try {
-    synthesis = JSON.parse(synthesisOutput);
-  } catch {
-    return;
-  }
-
-  if (synthesis.decisions?.length) {
-    const { data: decisionsFile } = await admin
-      .from("project_files")
-      .select("id,content")
-      .eq("project_id", projectId)
-      .eq("path", "decisions.md")
-      .maybeSingle();
-
-    if (decisionsFile) {
-      const newDecisions = synthesis.decisions
-        .map((d) => `- ${d} _(from: ${title}, ${today})_`)
-        .join("\n");
-      const updatedContent = decisionsFile.content.replace(
-        "_No decisions recorded yet._\n",
-        "",
-      );
-      await editProjectFile({
-        projectId,
-        path: "decisions.md",
-        content: updatedContent.trimEnd() + "\n" + newDecisions + "\n",
-        userId,
-        createdByAgent: false,
-      });
-    }
-  }
-
-  if (synthesis.memory_entry) {
-    await appendMemoryEntry({
-      projectId,
-      userId,
-      heading: `Ingested: ${title}`,
-      body: synthesis.memory_entry,
-      date: today,
-    });
-  }
-
-  if (synthesis.index_entry) {
-    const { data: indexFile } = await admin
-      .from("project_files")
-      .select("id,content")
-      .eq("project_id", projectId)
-      .eq("path", "index.md")
-      .maybeSingle();
-
-    if (indexFile && !indexFile.content.includes(title)) {
-      await admin
-        .from("project_files")
-        .update({
-          content:
-            indexFile.content.trimEnd() +
-            `\n- Source: ${title} — ${synthesis.index_entry}\n`,
-        })
-        .eq("id", indexFile.id);
-    }
   }
 }

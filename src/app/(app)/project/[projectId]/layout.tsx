@@ -26,7 +26,7 @@ export default async function ProjectLayout({
   return (
     <>
       <AppHeader />
-      <main className="mx-auto flex w-full max-w-[1400px] flex-1">
+      <main className="flex w-full flex-1">
         <ProjectSidebar
           projectId={projectId}
           projectName={project.name}

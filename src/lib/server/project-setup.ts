@@ -12,7 +12,7 @@ const DEFAULT_FILES: {
     content: [
       "# Project Wiki Index",
       "",
-      "This index is maintained by the agent. Each entry summarizes a wiki page.",
+      "This index is maintained by the Librarian agent. Each entry summarizes a wiki page.",
       "",
       "## Core Files",
       "- PROJECT.md — Project overview, scope, key people, and risks",
@@ -20,6 +20,18 @@ const DEFAULT_FILES: {
       "- PRODUCT.md — Product thinking, decisions, and trade-offs",
       "- decisions.md — Log of key decisions extracted from sources and conversations",
       "- glossary.md — Project-specific terminology and definitions",
+      "",
+    ].join("\n"),
+    pinned: false,
+    visibility: "internal",
+    is_source_of_truth: false,
+  },
+  {
+    path: "log.md",
+    content: [
+      "# Librarian Activity Log",
+      "",
+      "Append-only record of Librarian runs. Most recent entries are at the bottom.",
       "",
     ].join("\n"),
     pinned: false,

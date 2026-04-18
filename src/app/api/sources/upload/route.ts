@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { getOptionalSessionUser } from "@/lib/server/auth";
 import { getProjectAccessForUser } from "@/lib/server/data";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { extractText, ingestSourceMaterial } from "@/lib/server/ingestion";
+import { triggerOnSourceIngested } from "@/lib/server/librarian/triggers";
 
 export const maxDuration = 120;
 
@@ -68,6 +69,18 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       text,
       title: file.name,
+    });
+
+    after(async () => {
+      try {
+        await triggerOnSourceIngested({
+          projectId,
+          userId: user.id,
+          sourceId: source.id,
+        });
+      } catch (err) {
+        console.error("Librarian trigger on source ingest failed", err);
+      }
     });
 
     const { data: completed } = await admin

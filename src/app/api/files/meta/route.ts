@@ -34,6 +34,7 @@ export async function PATCH(request: NextRequest) {
     .update(updates)
     .eq("id", fileId)
     .eq("project_id", body.projectId)
+    .is("deleted_at", null)
     .select("*")
     .single();
 

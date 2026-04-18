@@ -7,6 +7,7 @@ import {
   Presentation,
   FileText,
   MessageSquareText,
+  RotateCcw,
   Upload,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -59,6 +60,7 @@ export function SourcesPanel({
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<Record<string, "pending" | "uploading" | "done" | "failed">>({});
+  const [retryingSourceId, setRetryingSourceId] = useState<string | null>(null);
 
   const uploadAll = useCallback(async () => {
     if (stagedFiles.length === 0 || isUploading) return;
@@ -107,6 +109,20 @@ export function SourcesPanel({
     setIsUploading(false);
     setUploadProgress({});
   }, [stagedFiles, isUploading, projectId]);
+
+  const retryIngestion = useCallback(async (sourceId: string) => {
+    if (retryingSourceId) return;
+    setRetryingSourceId(sourceId);
+    try {
+      const response = await fetch(`/api/sources/${sourceId}/retry`, { method: "POST" });
+      const data = await response.json();
+      if (response.ok && data.source) {
+        setSources((prev) => prev.map((s) => (s.id === sourceId ? data.source : s)));
+      }
+    } finally {
+      setRetryingSourceId(null);
+    }
+  }, [retryingSourceId]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -159,9 +175,27 @@ export function SourcesPanel({
                     {sourceTypeIcon(source.type)}
                   </div>
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="truncate text-sm font-medium leading-tight">{source.title}</h3>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="min-w-0 truncate text-sm font-medium leading-tight">{source.title}</h3>
                       {statusBadge(source.status)}
+                      {(source.status === "processing" || source.status === "failed") && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1 px-2 text-[11px] shrink-0"
+                          disabled={retryingSourceId === source.id}
+                          title="Re-run extraction and embedding from the stored file"
+                          onClick={() => void retryIngestion(source.id)}
+                        >
+                          {retryingSourceId === source.id ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : (
+                            <RotateCcw className="size-3" />
+                          )}
+                          Retry
+                        </Button>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1">

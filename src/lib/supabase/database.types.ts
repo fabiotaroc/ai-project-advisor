@@ -158,6 +158,7 @@ export type Database = {
           content: string
           created_at: string
           created_by_agent: boolean
+          deleted_at: string | null
           id: string
           is_source_of_truth: boolean
           locked: boolean
@@ -172,6 +173,7 @@ export type Database = {
           content?: string
           created_at?: string
           created_by_agent?: boolean
+          deleted_at?: string | null
           id?: string
           is_source_of_truth?: boolean
           locked?: boolean
@@ -186,6 +188,7 @@ export type Database = {
           content?: string
           created_at?: string
           created_by_agent?: boolean
+          deleted_at?: string | null
           id?: string
           is_source_of_truth?: boolean
           locked?: boolean
@@ -195,6 +198,48 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           visibility?: string
+        }
+        Relationships: []
+      }
+      librarian_runs: {
+        Row: {
+          actor_id: string | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          mode: string
+          project_id: string
+          started_at: string
+          status: string
+          summary: string | null
+          trigger_ref: string | null
+          trigger_type: string
+        }
+        Insert: {
+          actor_id?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          mode?: string
+          project_id: string
+          started_at?: string
+          status?: string
+          summary?: string | null
+          trigger_ref?: string | null
+          trigger_type: string
+        }
+        Update: {
+          actor_id?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          mode?: string
+          project_id?: string
+          started_at?: string
+          status?: string
+          summary?: string | null
+          trigger_ref?: string | null
+          trigger_type?: string
         }
         Relationships: []
       }

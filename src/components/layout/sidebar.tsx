@@ -139,7 +139,7 @@ export function ProjectSidebar({
         : conversationItems[0];
 
       if (outgoing) {
-        triggerConversationMemory(projectId, outgoing.id, outgoing.title);
+        triggerConversationMemory(projectId, outgoing.id);
       }
 
       const conversation = await createProjectConversation(projectId);
@@ -286,11 +286,15 @@ export function ProjectSidebar({
         )}
       >
         <div className="flex min-h-0 flex-1 flex-col gap-4 p-2">
-          {/* Project header (links to settings) + collapse toggle */}
-          <div className={cn(
-            "flex items-center",
-            collapsed ? "flex-col gap-1 py-1" : "justify-between gap-2 px-2 py-1",
-          )}>
+          {/* Project header + collapse; shared min-height keeps Search/nav aligned when toggling */}
+          <div
+            className={cn(
+              "flex shrink-0 py-1",
+              collapsed
+                ? "min-h-[4.75rem] flex-col items-center justify-center gap-1"
+                : "min-h-[4.75rem] flex-row items-center justify-between gap-2 px-2",
+            )}
+          >
             {collapsed ? (
               <>
                 <Tooltip>
@@ -348,24 +352,26 @@ export function ProjectSidebar({
 
           {/* Search trigger */}
           {collapsed ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => setSearchOpen(true)}
-                  className="flex size-8 items-center justify-center self-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                >
-                  <Search className="size-4 shrink-0" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right">Search &middot; ⌘K</TooltipContent>
-            </Tooltip>
+            <div className="flex min-h-10 items-center justify-center">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setSearchOpen(true)}
+                    className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  >
+                    <Search className="size-4 shrink-0" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Search &middot; ⌘K</TooltipContent>
+              </Tooltip>
+            </div>
           ) : (
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
               className={cn(
-                "flex items-center gap-2.5 rounded-md border border-border bg-background/50 px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+                "flex min-h-10 items-center gap-2.5 rounded-md border border-border bg-background/50 px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
               )}
             >
               <Search className="size-4 shrink-0" />

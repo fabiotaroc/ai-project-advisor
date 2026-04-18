@@ -1,16 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Bot,
   Eye,
   EyeOff,
+  Loader2,
   Lock,
   LockOpen,
   Pin,
   PinOff,
   ShieldCheck,
   ShieldOff,
+  Sparkles,
   User,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -164,6 +167,12 @@ function FileControlButtons({
   );
 }
 
+type LintStatus =
+  | { kind: "idle" }
+  | { kind: "running" }
+  | { kind: "done"; summary: string | null; actions: number; suggestions: number }
+  | { kind: "error"; message: string };
+
 export function WikiPanel({
   projectId,
   files: initialFiles,
@@ -171,9 +180,70 @@ export function WikiPanel({
   projectId: string;
   files: ProjectFile[];
 }) {
+  const router = useRouter();
   const [files, setFiles] = useState(initialFiles);
   const [selectedPath, setSelectedPath] = useState(initialFiles[0]?.path ?? "PROJECT.md");
   const [content, setContent] = useState(initialFiles[0]?.content ?? "");
+  const [lintStatus, setLintStatus] = useState<LintStatus>({ kind: "idle" });
+
+  useEffect(() => {
+    setFiles(initialFiles);
+  }, [initialFiles]);
+
+  async function runWikiLint() {
+    if (lintStatus.kind === "running") return;
+    setLintStatus({ kind: "running" });
+    try {
+      const response = await fetch(`/api/projects/${projectId}/librarian`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trigger: "lint" }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        setLintStatus({
+          kind: "error",
+          message: payload?.error ?? `Request failed (${response.status})`,
+        });
+        return;
+      }
+      const payload = (await response.json()) as {
+        run?: {
+          status: "succeeded" | "failed" | "skipped";
+          summary: string | null;
+          actions: unknown[];
+          suggestions: unknown[];
+          error?: string;
+        };
+      };
+      const run = payload.run;
+      if (!run) {
+        setLintStatus({ kind: "error", message: "Empty response from Librarian." });
+        return;
+      }
+      if (run.status === "failed") {
+        setLintStatus({
+          kind: "error",
+          message: run.error ?? "Librarian run failed.",
+        });
+        return;
+      }
+
+      setLintStatus({
+        kind: "done",
+        summary: run.summary,
+        actions: run.actions?.length ?? 0,
+        suggestions: run.suggestions?.length ?? 0,
+      });
+
+      router.refresh();
+    } catch (err) {
+      setLintStatus({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Unknown error",
+      });
+    }
+  }
 
   const surfacedFiles = useMemo(
     () => files.filter((f) => f.visibility === "surfaced"),
@@ -270,8 +340,62 @@ export function WikiPanel({
   return (
     <section className="grid h-[calc(100vh-8rem)] grid-cols-[18rem_1fr] gap-3">
       <Card className="flex min-h-0 flex-col py-0">
-        <CardHeader className="shrink-0 px-3 pt-3 pb-0">
-          <CardTitle className="text-sm font-semibold">Wiki</CardTitle>
+        <CardHeader className="shrink-0 gap-2 px-3 pt-3 pb-0">
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-sm font-semibold">Wiki</CardTitle>
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 px-2 text-xs"
+                    onClick={runWikiLint}
+                    disabled={lintStatus.kind === "running"}
+                  >
+                    {lintStatus.kind === "running" ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="size-3.5" />
+                    )}
+                    {lintStatus.kind === "running" ? "Curating…" : "Curate"}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[15rem] text-xs">
+                  Runs the Librarian over every file to check for stale content,
+                  contradictions, orphans, missing pages, and index gaps.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          {lintStatus.kind !== "idle" && (
+            <div
+              className={cn(
+                "rounded-md border px-2 py-1.5 text-[11px] leading-snug",
+                lintStatus.kind === "error"
+                  ? "border-destructive/30 bg-destructive/5 text-destructive"
+                  : "border-border bg-muted/40 text-muted-foreground",
+              )}
+            >
+              {lintStatus.kind === "running" && (
+                <span>Librarian is reviewing the wiki — usually under a minute.</span>
+              )}
+              {lintStatus.kind === "done" && (
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-foreground">
+                    {lintStatus.actions} change
+                    {lintStatus.actions === 1 ? "" : "s"}, {lintStatus.suggestions} suggestion
+                    {lintStatus.suggestions === 1 ? "" : "s"}.
+                  </span>
+                  {lintStatus.summary && (
+                    <span className="line-clamp-3">{lintStatus.summary}</span>
+                  )}
+                </div>
+              )}
+              {lintStatus.kind === "error" && <span>Lint failed: {lintStatus.message}</span>}
+            </div>
+          )}
         </CardHeader>
         <CardContent className="min-h-0 flex-1 overflow-hidden px-3 pt-2 pb-3">
           <Tabs defaultValue="surfaced" className="flex h-full flex-col">

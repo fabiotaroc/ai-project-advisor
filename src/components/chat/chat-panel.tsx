@@ -537,10 +537,10 @@ export function ChatPanel({
                     <article key={message.id} className={cn("flex flex-col gap-1.5", message.role === "user" ? "items-end" : "items-start")}>
                       <div
                         className={cn(
-                          "max-w-[min(42rem,100%)] rounded-[1.75rem] px-4 py-3 shadow-sm",
+                          "rounded-[1.75rem] px-4 py-3 shadow-sm",
                           message.role === "user"
-                            ? "rounded-br-md bg-primary text-primary-foreground"
-                            : "rounded-bl-md border border-border/70 bg-background/95"
+                            ? "max-w-[min(42rem,100%)] rounded-br-md bg-primary text-primary-foreground"
+                            : "max-w-[min(42rem,100%)] rounded-bl-md border border-border/70 bg-background/95"
                         )}
                       >
                         {message.role === "user" ? (
@@ -561,7 +561,7 @@ export function ChatPanel({
                 {isBusy && messages[messages.length - 1]?.role === "user" ? (
                   <div className="flex flex-col items-start gap-1.5">
                     <p className="px-1 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Advisor</p>
-                    <div className="max-w-[min(24rem,100%)] rounded-[1.75rem] rounded-bl-md border border-border/70 bg-background/95 px-4 py-3 shadow-sm">
+                    <div className="max-w-[min(42rem,100%)] rounded-[1.75rem] rounded-bl-md border border-border/70 bg-background/95 px-4 py-3 shadow-sm">
                       <div className="flex items-center gap-3 text-sm text-muted-foreground">
                         <Loader2 className="size-4 animate-spin text-primary" />
                         Reviewing the project context...

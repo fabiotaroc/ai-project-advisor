@@ -7,7 +7,7 @@ export async function AppHeader() {
 
   return (
     <header className="border-b border-border bg-card">
-      <div className="mx-auto flex h-12 max-w-[1400px] items-center justify-between px-5">
+      <div className="flex h-12 w-full items-center justify-between px-5">
         <Link href="/app" className="text-sm font-semibold tracking-tight text-foreground">
           Project Advisor
         </Link>
