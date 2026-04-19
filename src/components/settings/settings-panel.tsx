@@ -130,7 +130,19 @@ export function SettingsPanel({
 
   function save() {
     startTransition(async () => {
-      const { project_id: _, created_at: __, updated_at: ___, ...payload } = settings;
+      const payload = {
+        tone: settings.tone,
+        verbosity: settings.verbosity,
+        default_format: settings.default_format,
+        proactivity: settings.proactivity,
+        language: settings.language,
+        client_name: settings.client_name,
+        team_name: settings.team_name,
+        project_phase: settings.project_phase,
+        additional_context: settings.additional_context,
+        auto_synthesize_on_ingest: settings.auto_synthesize_on_ingest,
+        auto_create_entity_pages: settings.auto_create_entity_pages,
+      };
       const response = await fetch(`/api/projects/${projectId}/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -239,7 +251,7 @@ export function SettingsPanel({
                 <div className="min-w-0 flex-1">
                   <Label className="text-sm font-medium">Language</Label>
                   <p className="mt-0.5 text-sm text-muted-foreground">
-                    Language for the advisor's responses.
+                    Language for the advisor’s responses.
                   </p>
                 </div>
                 <Input
@@ -349,7 +361,7 @@ export function SettingsPanel({
             </CardHeader>
             <CardContent>
               <p className={cn("rounded-lg border border-dashed border-border bg-muted/40 px-4 py-8 text-center text-sm text-muted-foreground")}>
-                Output templates are coming soon. You'll be able to define client-facing report
+                Output templates are coming soon. You’ll be able to define client-facing report
                 formats, internal summary templates, and more.
               </p>
             </CardContent>

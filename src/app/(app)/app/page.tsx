@@ -78,13 +78,13 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
                     </span>
                   ) : null}
                   {project.sources_processing > 0 ? (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/70 bg-amber-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-amber-700">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-warning/35 bg-warning/12 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-warning">
                       <Loader2 className="size-3 animate-spin" />
                       {project.sources_processing} processing
                     </span>
                   ) : null}
                   {project.sources_failed > 0 ? (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-red-300/70 bg-red-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-red-700">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-destructive dark:bg-destructive/20">
                       <AlertTriangle className="size-3" />
                       {project.sources_failed} failed
                     </span>

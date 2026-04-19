@@ -26,7 +26,13 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Viewers have read-only access to this project." }, { status: 403 });
   }
 
-  const { projectId: _, fileId, ...updates } = body;
+  const updates = {
+    pinned: body.pinned,
+    visibility: body.visibility,
+    locked: body.locked,
+    is_source_of_truth: body.is_source_of_truth,
+  };
+  const fileId = body.fileId;
   const supabase = createSupabaseAdminClient();
 
   const { data, error } = await supabase

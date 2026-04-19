@@ -154,7 +154,7 @@ export function SourcesPanel({
                 className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-sm"
               >
                 {status === "uploading" && <Loader2 className="size-3.5 animate-spin text-primary" />}
-                {status === "done" && <span className="text-xs text-green-600">✓</span>}
+                {status === "done" && <span className="text-xs text-success">✓</span>}
                 {status === "failed" && <span className="text-xs text-destructive">✗</span>}
                 <span className="truncate">{f.name}</span>
                 <span className="ml-auto text-xs capitalize text-muted-foreground">{status}</span>

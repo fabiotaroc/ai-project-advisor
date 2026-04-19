@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { ArrowRight, LockKeyhole, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -135,6 +136,9 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
 
   return (
     <main className="relative isolate min-h-screen overflow-hidden bg-background px-6 py-10 md:px-10">
+      <div className="absolute top-6 right-6 z-20 md:top-8 md:right-10">
+        <ThemeToggle />
+      </div>
       <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-linear-to-b from-muted/60 via-muted/20 to-transparent" />
       <div className="pointer-events-none absolute -left-24 top-24 size-72 rounded-full bg-primary/6 blur-3xl" />
       <div className="pointer-events-none absolute right-0 top-0 size-80 rounded-full bg-secondary blur-3xl" />

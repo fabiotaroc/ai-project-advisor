@@ -276,7 +276,9 @@ function ReasoningBlock({
           >
             {isStreaming ? "Live" : "Ready"}
           </span>
-          <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+          <ChevronDown
+            className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-180")}
+          />
         </div>
       </button>
       {open ? (

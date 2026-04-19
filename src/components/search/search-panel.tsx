@@ -109,7 +109,7 @@ export function SearchPanel({ projectId }: { projectId: string }) {
 
       {hasSearched && results.length === 0 && (
         <p className="py-6 text-center text-sm text-muted-foreground">
-          No results found for "{query}".
+          No results found for &ldquo;{query}&rdquo;.
         </p>
       )}
     </div>

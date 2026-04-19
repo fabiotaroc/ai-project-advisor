@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Image from "next/image";
+import { ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { ImageIcon } from "lucide-react";
 
 type Props = {
   projectId: string;
@@ -26,16 +26,41 @@ function normalizeLogoUrl(value: unknown) {
   return typeof value === "string" ? value : null;
 }
 
-export function ProjectIdentityCard({
+export function ProjectIdentityCard(props: Props) {
+  const initialNameValue = normalizeText(props.initialName);
+  const initialDescriptionValue = normalizeText(props.initialDescription);
+  const initialLogoUrlValue = normalizeLogoUrl(props.initialLogoUrl);
+
+  return (
+    <ProjectIdentityCardInner
+      key={[
+        props.projectId,
+        initialNameValue,
+        initialDescriptionValue,
+        initialLogoUrlValue ?? "",
+      ].join(":")}
+      {...props}
+      initialNameValue={initialNameValue}
+      initialDescriptionValue={initialDescriptionValue}
+      initialLogoUrlValue={initialLogoUrlValue}
+    />
+  );
+}
+
+function ProjectIdentityCardInner({
   projectId,
   isOwner,
-  initialName,
-  initialDescription,
-  initialLogoUrl,
-}: Props) {
-  const [name, setName] = useState(() => normalizeText(initialName));
-  const [description, setDescription] = useState(() => normalizeText(initialDescription));
-  const [logoUrl, setLogoUrl] = useState<string | null>(() => normalizeLogoUrl(initialLogoUrl));
+  initialNameValue,
+  initialDescriptionValue,
+  initialLogoUrlValue,
+}: Props & {
+  initialNameValue: string;
+  initialDescriptionValue: string;
+  initialLogoUrlValue: string | null;
+}) {
+  const [name, setName] = useState(initialNameValue);
+  const [description, setDescription] = useState(initialDescriptionValue);
+  const [logoUrl, setLogoUrl] = useState<string | null>(initialLogoUrlValue);
   const [savePending, startSave] = useTransition();
   const [savedState, setSavedState] = useState<"idle" | "saved" | "error">("idle");
   const isReadOnly = !isOwner;
@@ -43,14 +68,7 @@ export function ProjectIdentityCard({
   const safeDescription = normalizeText(description);
 
   useEffect(() => {
-    setName(normalizeText(initialName));
-    setDescription(normalizeText(initialDescription));
-    setLogoUrl(normalizeLogoUrl(initialLogoUrl));
-    setSavedState("idle");
-  }, [initialDescription, initialLogoUrl, initialName, projectId]);
-
-  useEffect(() => {
-    if (normalizeText(initialName).trim().length > 0) {
+    if (initialNameValue.trim().length > 0) {
       return;
     }
 
@@ -92,7 +110,7 @@ export function ProjectIdentityCard({
     return () => {
       cancelled = true;
     };
-  }, [initialName, projectId]);
+  }, [initialNameValue, projectId]);
 
   const save = useCallback(() => {
     startSave(async () => {
@@ -120,15 +138,12 @@ export function ProjectIdentityCard({
     .join("");
 
   return (
-    <Card className="border-border bg-card overflow-hidden">
+    <Card className="overflow-hidden border-border bg-card">
       <div className="h-1 w-full bg-linear-to-r from-primary/60 via-primary/30 to-transparent" />
       <CardContent className="pt-6 pb-6">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
-          {/* Logo display (read-only) */}
           <div className="flex flex-col items-center gap-2">
-            <div
-              className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-border bg-muted/50"
-            >
+            <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-border bg-muted/50">
               {logoUrl ? (
                 <Image
                   src={logoUrl}
@@ -149,7 +164,6 @@ export function ProjectIdentityCard({
             </div>
           </div>
 
-          {/* Fields */}
           <div className="min-w-0 flex-1 space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="project-name" className="text-sm font-medium">
@@ -201,7 +215,8 @@ export function ProjectIdentityCard({
               onClick={save}
               disabled={savePending}
               className={cn(
-                savedState === "saved" && "bg-emerald-600 hover:bg-emerald-700",
+                savedState === "saved" &&
+                  "bg-success text-success-foreground hover:bg-success/90",
                 savedState === "error" && "bg-destructive hover:bg-destructive/90",
               )}
             >
