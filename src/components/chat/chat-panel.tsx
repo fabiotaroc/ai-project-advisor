@@ -11,8 +11,6 @@ import {
   Brain,
   BookOpen,
   ChevronDown,
-  Eye,
-  EyeOff,
   FilePenLine,
   FileText,
   FolderTree,
@@ -30,8 +28,13 @@ import remarkGfm from "remark-gfm";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupTextarea,
+} from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
 
 const SUGGESTED_PROMPTS = [
@@ -154,8 +157,6 @@ function FileEditNotification({
 }
 
 function ToolCallBlock({ part }: { part: ToolPartInfo }) {
-  const [open, setOpen] = useState(false);
-
   const toolName = (part.toolName ?? part.type.replace(/^tool-/, "")) || "tool";
   const meta = TOOL_META[toolName] ?? { label: humanizeToolName(toolName), icon: Wrench };
   const Icon = meta.icon;
@@ -167,59 +168,50 @@ function ToolCallBlock({ part }: { part: ToolPartInfo }) {
   const hasError = state === "output-error";
   const hasOutput = state === "output-available";
 
+  const [open, setOpen] = useState(isRunning);
+  useEffect(() => {
+    setOpen(isRunning);
+  }, [isRunning]);
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-border/70 bg-muted/35">
+    <div className="flex flex-col">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/60"
+        className="group flex w-full items-center gap-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border/80 bg-background/90">
-          {isRunning ? <Loader2 className="size-3.5 animate-spin text-primary" /> : <Icon className="size-3.5 text-muted-foreground" />}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="font-mono text-xs text-foreground/75">{toolName}</span>
-            <span className="text-sm font-medium text-foreground">{meta.label}</span>
-          </div>
-          {summary ? <p className="truncate pt-0.5 text-xs text-muted-foreground">{summary}</p> : null}
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.18em]",
-              isRunning && "border-primary/20 bg-primary/10 text-primary",
-              hasOutput && "border-border bg-background text-muted-foreground",
-              hasError && "border-destructive/20 bg-destructive/10 text-destructive"
-            )}
-          >
-            {isRunning ? "Running" : hasError ? "Error" : "Done"}
-          </span>
-          <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-180")} />
-        </div>
+        {isRunning ? (
+          <Loader2 className="size-3 shrink-0 animate-spin text-primary" />
+        ) : hasError ? (
+          <Icon className="size-3 shrink-0 text-destructive" />
+        ) : (
+          <Icon className="size-3 shrink-0" />
+        )}
+        <span className="font-mono text-[11px] text-foreground/70">{toolName}</span>
+        {summary ? (
+          <span className="min-w-0 truncate text-[11px] text-muted-foreground/80">· {summary}</span>
+        ) : null}
+        <ChevronDown
+          className={cn(
+            "ml-auto size-3 shrink-0 opacity-0 transition-all group-hover:opacity-60",
+            open && "rotate-180 opacity-60"
+          )}
+        />
       </button>
       {open ? (
-        <div className="flex flex-col gap-3 border-t border-border/70 px-3 py-3">
+        <div className="mt-1 flex flex-col gap-2 border-l border-border/60 pl-3">
           {Object.keys(input).length > 0 ? (
-            <div className="flex flex-col gap-1.5">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Parameters</p>
-              <pre className="overflow-x-auto rounded-xl border border-border/70 bg-background px-3 py-2 text-xs whitespace-pre-wrap text-foreground/80">
-                {stringifyValue(input)}
-              </pre>
-            </div>
+            <pre className="overflow-x-auto rounded-md bg-muted/40 px-2 py-1.5 text-[11px] whitespace-pre-wrap text-foreground/75">
+              {stringifyValue(input)}
+            </pre>
           ) : null}
           {hasOutput && output !== undefined ? (
-            <div className="flex flex-col gap-1.5">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Result</p>
-              <pre className="max-h-56 overflow-auto rounded-xl border border-border/70 bg-background px-3 py-2 text-xs whitespace-pre-wrap text-foreground/80">
-                {stringifyValue(output)}
-              </pre>
-            </div>
+            <pre className="max-h-48 overflow-auto rounded-md bg-muted/40 px-2 py-1.5 text-[11px] whitespace-pre-wrap text-foreground/75">
+              {stringifyValue(output)}
+            </pre>
           ) : null}
           {hasError ? (
-            <div className="rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {part.errorText ?? "The tool call failed."}
-            </div>
+            <p className="text-[11px] text-destructive">{part.errorText ?? "The tool call failed."}</p>
           ) : null}
         </div>
       ) : null}
@@ -235,58 +227,36 @@ function ReasoningBlock({
   isStreaming: boolean;
 }) {
   const [open, setOpen] = useState(isStreaming);
-
   useEffect(() => {
-    if (isStreaming) {
-      setOpen(true);
-    }
+    setOpen(isStreaming);
   }, [isStreaming]);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border/70 bg-muted/35">
+    <div className="flex flex-col">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/60"
+        className="group flex w-full items-center gap-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border/80 bg-background/90">
-          {isStreaming ? (
-            <Loader2 className="size-3.5 animate-spin text-primary" />
-          ) : (
-            <Brain className="size-3.5 text-muted-foreground" />
+        {isStreaming ? (
+          <Loader2 className="size-3 shrink-0 animate-spin text-primary" />
+        ) : (
+          <Brain className="size-3 shrink-0" />
+        )}
+        <span className="font-mono text-[11px] text-foreground/70">
+          {isStreaming ? "thinking..." : "thought"}
+        </span>
+        <ChevronDown
+          className={cn(
+            "ml-auto size-3 shrink-0 opacity-0 transition-all group-hover:opacity-60",
+            open && "rotate-180 opacity-60"
           )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="font-mono text-xs text-foreground/75">reasoning</span>
-            <span className="text-sm font-medium text-foreground">Thinking summary</span>
-          </div>
-          <p className="truncate pt-0.5 text-xs text-muted-foreground">
-            {isStreaming ? "Streaming model reasoning..." : "Review how the model approached this answer."}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.18em]",
-              isStreaming
-                ? "border-primary/20 bg-primary/10 text-primary"
-                : "border-border bg-background text-muted-foreground"
-            )}
-          >
-            {isStreaming ? "Live" : "Ready"}
-          </span>
-          <ChevronDown
-            className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-180")}
-          />
-        </div>
+        />
       </button>
       {open ? (
-        <div className="border-t border-border/70 px-3 py-3">
-          <pre className="max-h-64 overflow-auto rounded-xl border border-border/70 bg-background px-3 py-2 text-xs leading-6 whitespace-pre-wrap text-foreground/80">
-            {text}
-          </pre>
-        </div>
+        <pre className="mt-1 max-h-56 overflow-auto border-l border-border/60 pl-3 text-[11px] leading-5 whitespace-pre-wrap text-foreground/75">
+          {text}
+        </pre>
       ) : null}
     </div>
   );
@@ -294,30 +264,94 @@ function ReasoningBlock({
 
 function AssistantMessage({
   message,
-  showToolCalls,
-  showReasoning,
   isStreaming,
   projectId,
 }: {
   message: UIMessage;
-  showToolCalls: boolean;
-  showReasoning: boolean;
   isStreaming: boolean;
   projectId: string;
 }) {
-  const toolParts = message.parts.filter(isToolPart).map((part) => part as ToolPartInfo);
-  const reasoningParts = message.parts.filter(isReasoningPart);
-  const reasoningText = reasoningParts.map((part) => part.text).join("\n\n").trim();
+  const editFileParts = message.parts
+    .filter(isToolPart)
+    .map((part) => part as ToolPartInfo)
+    .filter(
+      (p) =>
+        (p.toolName === "edit_file" || p.type === "tool-edit_file") &&
+        p.state === "output-available" &&
+        p.output,
+    );
 
-  const editFileParts = toolParts.filter(
-    (p) =>
-      (p.toolName === "edit_file" || p.type === "tool-edit_file") &&
-      p.state === "output-available" &&
-      p.output,
-  );
+  const sequentialNodes = message.parts.map((part, index) => {
+    if (isReasoningPart(part)) {
+      const text = (part.text ?? "").trim();
+      if (!text) return null;
+      const isLastPart = index === message.parts.length - 1;
+      return (
+        <ReasoningBlock
+          key={`${message.id}-reasoning-${index}`}
+          text={text}
+          isStreaming={isStreaming && isLastPart}
+        />
+      );
+    }
+
+    if (isToolPart(part)) {
+      const toolPart = part as ToolPartInfo;
+      return (
+        <ToolCallBlock
+          key={toolPart.toolCallId ?? `${message.id}-tool-${index}`}
+          part={toolPart}
+        />
+      );
+    }
+
+    if (part.type === "text" && part.text) {
+      return (
+        <div
+          key={`${message.id}-text-${index}`}
+          className={cn(
+            "text-sm text-foreground/95",
+            "[&_p]:whitespace-pre-wrap [&_p]:leading-7",
+            "[&_p:not(:first-child)]:mt-3",
+            "[&_strong]:font-semibold",
+            "[&_em]:italic",
+            "[&_h1]:mt-5 [&_h1]:text-lg [&_h1]:font-semibold [&_h1]:tracking-tight",
+            "[&_h2]:mt-4 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:tracking-tight",
+            "[&_h3]:mt-4 [&_h3]:text-sm [&_h3]:font-semibold",
+            "[&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6",
+            "[&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-6",
+            "[&_li]:mt-1 [&_li>p]:whitespace-normal",
+            "[&_a]:font-medium [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-4",
+            "[&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-border/70 [&_blockquote]:pl-4 [&_blockquote]:text-muted-foreground",
+            "[&_hr]:my-4 [&_hr]:border-border/70",
+            "[&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_table]:overflow-hidden [&_table]:rounded-lg",
+            "[&_th]:border-b [&_th]:border-border/70 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium",
+            "[&_td]:border-b [&_td]:border-border/40 [&_td]:px-3 [&_td]:py-2 [&_td]:align-top",
+            "[&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-border/70 [&_pre]:bg-muted/45 [&_pre]:px-4 [&_pre]:py-3",
+            "[&_code]:rounded-md [&_code]:bg-muted/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.9em]",
+            "[&_pre_code]:bg-transparent [&_pre_code]:p-0"
+          )}
+        >
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              a: ({ node, ...props }) => {
+                void node;
+                return <a {...props} rel="noreferrer" target="_blank" />;
+              },
+            }}
+          >
+            {part.text}
+          </ReactMarkdown>
+        </div>
+      );
+    }
+
+    return null;
+  });
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2">
       {editFileParts.map((part, index) => (
         <FileEditNotification
           key={part.toolCallId ?? `edit-${index}`}
@@ -325,63 +359,7 @@ function AssistantMessage({
           projectId={projectId}
         />
       ))}
-      {showReasoning && reasoningText ? (
-        <ReasoningBlock text={reasoningText} isStreaming={isStreaming} />
-      ) : null}
-      {!showReasoning && reasoningParts.length > 0 ? (
-        <div className="rounded-2xl border border-dashed border-border/80 bg-muted/25 px-3 py-2 text-xs text-muted-foreground">
-          Thinking hidden
-        </div>
-      ) : null}
-      {showToolCalls ? toolParts.map((part, index) => <ToolCallBlock key={part.toolCallId ?? `${message.id}-tool-${index}`} part={part} />) : null}
-      {!showToolCalls && toolParts.length > 0 ? (
-        <div className="rounded-2xl border border-dashed border-border/80 bg-muted/25 px-3 py-2 text-xs text-muted-foreground">
-          {toolParts.length} tool {toolParts.length === 1 ? "step" : "steps"} hidden
-        </div>
-      ) : null}
-      {message.parts.map((part, index) => {
-        if (part.type !== "text" || !part.text) return null;
-
-        return (
-          <div
-            key={`${message.id}-text-${index}`}
-            className={cn(
-              "text-sm text-foreground/95",
-              "[&_p]:whitespace-pre-wrap [&_p]:leading-7",
-              "[&_p:not(:first-child)]:mt-3",
-              "[&_strong]:font-semibold",
-              "[&_em]:italic",
-              "[&_h1]:mt-5 [&_h1]:text-lg [&_h1]:font-semibold [&_h1]:tracking-tight",
-              "[&_h2]:mt-4 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:tracking-tight",
-              "[&_h3]:mt-4 [&_h3]:text-sm [&_h3]:font-semibold",
-              "[&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6",
-              "[&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-6",
-              "[&_li]:mt-1 [&_li>p]:whitespace-normal",
-              "[&_a]:font-medium [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-4",
-              "[&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-border/70 [&_blockquote]:pl-4 [&_blockquote]:text-muted-foreground",
-              "[&_hr]:my-4 [&_hr]:border-border/70",
-              "[&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_table]:overflow-hidden [&_table]:rounded-lg",
-              "[&_th]:border-b [&_th]:border-border/70 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium",
-              "[&_td]:border-b [&_td]:border-border/40 [&_td]:px-3 [&_td]:py-2 [&_td]:align-top",
-              "[&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-border/70 [&_pre]:bg-muted/45 [&_pre]:px-4 [&_pre]:py-3",
-              "[&_code]:rounded-md [&_code]:bg-muted/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.9em]",
-              "[&_pre_code]:bg-transparent [&_pre_code]:p-0"
-            )}
-          >
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                a: ({ node, ...props }) => {
-                  void node;
-                  return <a {...props} rel="noreferrer" target="_blank" />;
-                },
-              }}
-            >
-              {part.text}
-            </ReactMarkdown>
-          </div>
-        );
-      })}
+      {sequentialNodes}
     </div>
   );
 }
@@ -438,8 +416,6 @@ export function ChatPanel({
 }) {
   const router = useRouter();
   const [input, setInput] = useState("");
-  const [showToolCalls, setShowToolCalls] = useState(false);
-  const [showReasoning, setShowReasoning] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const stableChatId = chatId ?? `${projectId}-new`;
@@ -498,31 +474,7 @@ export function ChatPanel({
     <section className="flex h-[calc(100vh-9.5rem)] min-h-[38rem] flex-col">
       <Card className="relative flex h-full min-h-0 border-border/70 bg-card/95 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.35)] supports-[backdrop-filter]:backdrop-blur">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-linear-to-b from-muted/45 via-muted/10 to-transparent" />
-        <CardHeader className="relative !flex flex-row flex-wrap items-center justify-end gap-2 border-b border-border/70 bg-linear-to-br from-background via-background to-muted/40">
-          <CardAction className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setShowReasoning((current) => !current)}
-              aria-pressed={showReasoning}
-            >
-              {showReasoning ? <EyeOff data-icon="inline-start" /> : <Eye data-icon="inline-start" />}
-              {showReasoning ? "Hide thinking" : "Show thinking"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setShowToolCalls((current) => !current)}
-              aria-pressed={showToolCalls}
-            >
-              {showToolCalls ? <EyeOff data-icon="inline-start" /> : <Eye data-icon="inline-start" />}
-              {showToolCalls ? "Hide tools" : "Show tools"}
-            </Button>
-          </CardAction>
-        </CardHeader>
-        <CardContent className="relative flex-1 overflow-hidden px-0">
+        <CardContent className="relative flex-1 overflow-hidden px-0 pt-0">
           <div ref={scrollRef} className="flex h-full flex-col gap-6 overflow-y-auto px-5 py-6 sm:px-6">
             {messages.length === 0 ? (
               <EmptyState isBusy={isBusy} onSuggestion={(prompt) => void submitText(prompt)} />
@@ -550,8 +502,6 @@ export function ChatPanel({
                         ) : (
                           <AssistantMessage
                             message={message}
-                            showToolCalls={showToolCalls}
-                            showReasoning={showReasoning}
                             isStreaming={isStreamingAssistantMessage}
                             projectId={projectId}
                           />
@@ -582,14 +532,13 @@ export function ChatPanel({
             </div>
           ) : null}
           <form
-            className="flex flex-col gap-3"
             onSubmit={(event) => {
               event.preventDefault();
               void submitText(input);
             }}
           >
-            <div className="rounded-[1.5rem] border border-border/80 bg-card px-4 py-3 shadow-sm">
-              <Textarea
+            <InputGroup className="rounded-3xl border-border/80 bg-card px-2 py-1.5 shadow-sm transition-shadow focus-within:shadow-md">
+              <InputGroupTextarea
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={(event) => {
@@ -599,17 +548,36 @@ export function ChatPanel({
                   }
                 }}
                 rows={3}
-                placeholder="Ask about project direction, source findings, or specific file changes..."
-                className="min-h-[88px] resize-none border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
+                placeholder="Ask anything about the project..."
+                className="min-h-[72px] px-3 py-2 text-sm leading-6 placeholder:text-muted-foreground/70"
               />
-              <div className="mt-3 flex flex-col gap-3 border-t border-border/70 pt-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs text-muted-foreground">Press Enter to send. Use Shift+Enter for a new line.</p>
-                <Button type="submit" disabled={isBusy || !input.trim()}>
-                  {isBusy ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <SendHorizontal data-icon="inline-start" />}
-                  {isBusy ? "Thinking" : "Send"}
-                </Button>
-              </div>
-            </div>
+              <InputGroupAddon align="block-end" className="px-2 pb-1.5">
+                <span className="text-[11px] text-muted-foreground/70">
+                  <kbd className="rounded border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                    Enter
+                  </kbd>{" "}
+                  to send ·{" "}
+                  <kbd className="rounded border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                    Shift + Enter
+                  </kbd>{" "}
+                  for newline
+                </span>
+                <InputGroupButton
+                  type="submit"
+                  variant="default"
+                  size="icon-sm"
+                  disabled={isBusy || !input.trim()}
+                  className="ml-auto rounded-full"
+                  aria-label={isBusy ? "Thinking" : "Send message"}
+                >
+                  {isBusy ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <SendHorizontal className="size-4" />
+                  )}
+                </InputGroupButton>
+              </InputGroupAddon>
+            </InputGroup>
           </form>
         </CardFooter>
       </Card>

@@ -38,14 +38,12 @@ function getMessageText(message: UIMessage) {
     .trim();
 }
 
-function getSerializedExtraParts(message: UIMessage) {
-  const extraParts = message.parts.filter((part) => part.type !== "text");
-
-  if (extraParts.length === 0) {
+function getSerializedParts(message: UIMessage) {
+  if (message.parts.length === 0) {
     return null;
   }
 
-  return JSON.parse(JSON.stringify(extraParts)) as unknown[];
+  return JSON.parse(JSON.stringify(message.parts)) as unknown[];
 }
 
 function getConversationTitle(messages: UIMessage[]) {
@@ -61,13 +59,19 @@ function getConversationTitle(messages: UIMessage[]) {
 
 function toUIMessage(record: MessageRecord): UIMessage {
   const parts: UIMessage["parts"] = [];
+  const storedParts = Array.isArray(record.tool_calls)
+    ? (record.tool_calls as UIMessage["parts"])
+    : [];
+  const storedHasText = storedParts.some(
+    (part) => part.type === "text" && typeof (part as { text?: unknown }).text === "string",
+  );
 
-  if (record.content) {
-    parts.push({ type: "text", text: record.content });
+  if (storedParts.length > 0) {
+    parts.push(...storedParts);
   }
 
-  if (Array.isArray(record.tool_calls)) {
-    parts.push(...(record.tool_calls as UIMessage["parts"]));
+  if (!storedHasText && record.content) {
+    parts.push({ type: "text", text: record.content });
   }
 
   if (parts.length === 0) {
@@ -311,7 +315,7 @@ export async function replaceConversationMessages(conversationId: string, messag
       conversation_id: conversationId,
       role: message.role === "user" || message.role === "assistant" || message.role === "system" ? message.role : "assistant",
       content: getMessageText(message),
-      tool_calls: getSerializedExtraParts(message),
+      tool_calls: getSerializedParts(message),
       citations: null,
       created_at: new Date(startedAt + index).toISOString(),
     }));
