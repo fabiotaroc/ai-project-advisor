@@ -213,7 +213,7 @@ export async function runLibrarian({
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     const activityPayload = buildRunActivityPayload(record);
-    const failureSummary = `Librarian ${runTriggerLabel(trigger)} failed: ${errorMessage.slice(0, 240)}`;
+    const failureSummary = `Librarian ${runTriggerLabel(trigger)} failed: ${errorMessage}`;
     console.error("Librarian run failed", { runId, error: errorMessage });
 
     await admin
@@ -480,9 +480,8 @@ function summariseRun(
   }
 
   const statsSummary = pieces.length ? pieces.join(", ") : "no changes";
-  const textSummary = finalText ? finalText.slice(0, 400) : "";
-  return textSummary
-    ? `Librarian ${runTriggerLabel(trigger)}: ${statsSummary}. ${textSummary}`
+  return finalText
+    ? `Librarian ${runTriggerLabel(trigger)}: ${statsSummary}. ${finalText}`
     : `Librarian ${runTriggerLabel(trigger)}: ${statsSummary}.`;
 }
 

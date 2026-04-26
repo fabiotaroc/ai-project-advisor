@@ -4,6 +4,7 @@ import { openai, type OpenAILanguageModelResponsesOptions } from "@ai-sdk/openai
 import { z } from "zod";
 import { getOptionalSessionUser } from "@/lib/server/auth";
 import { getProjectAccessForUser } from "@/lib/server/data";
+import { applyAiChatTitleIfAuto } from "@/lib/server/chats/chat-title";
 import {
   getOrCreateProjectConversation,
   replaceConversationMessages,
@@ -44,6 +45,13 @@ export async function POST(request: Request) {
   const userSupabase = await createSupabaseServerClient();
   const system = await assembleProjectSystemPrompt(projectId, user.id);
   const conversation = await getOrCreateProjectConversation(projectId, user.id, body.conversationId, body.messages);
+
+  void applyAiChatTitleIfAuto({
+    conversationId: conversation.id,
+    messages: body.messages,
+  }).catch((err) => {
+    console.error("AI chat title failed", err);
+  });
 
   const modelMessages = await convertToModelMessages(body.messages);
 

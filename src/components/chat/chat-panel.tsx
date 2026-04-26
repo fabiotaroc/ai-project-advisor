@@ -28,6 +28,7 @@ import remarkGfm from "remark-gfm";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import type { ProjectConversationListItem } from "@/lib/types";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import {
   InputGroup,
@@ -414,11 +415,7 @@ function EmptyState({
   );
 }
 
-export type ConversationSummary = {
-  id: string;
-  title: string;
-  created_at: string;
-};
+export type ConversationSummary = ProjectConversationListItem;
 
 export function ChatPanel({
   projectId,

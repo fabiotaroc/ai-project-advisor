@@ -1,3 +1,11 @@
+export type ProjectConversationListItem = {
+  id: string;
+  title: string;
+  created_at: string;
+  /** Most recent user-visible activity: last message time, or chat creation if empty. */
+  last_activity_at: string;
+};
+
 export type ProjectFile = {
   id: string;
   project_id: string;
@@ -36,9 +44,43 @@ export type SourceMaterial = {
   type: "document" | "email" | "meeting" | "note";
   title: string;
   summary: string | null;
+  parsed_content: string | null;
+  raw_storage_path: string | null;
   metadata: Record<string, unknown>;
   status: "processing" | "ready" | "failed";
+  uploaded_by: string | null;
   created_at: string;
+  updated_at: string;
+};
+
+export type SourceUploader = {
+  id: string;
+  name: string | null;
+  email: string;
+};
+
+export type SourceLinkedActivity = {
+  id: string;
+  event_type: string;
+  summary: string;
+  created_at: string;
+};
+
+export type SourceLinkedRun = {
+  id: string;
+  status: LibrarianRun["status"];
+  summary: string | null;
+  started_at: string;
+  finished_at: string | null;
+  action_count: number;
+  suggestion_count: number;
+};
+
+export type SourceMaterialDetail = SourceMaterial & {
+  chunk_count: number;
+  uploader: SourceUploader | null;
+  linked_activity: SourceLinkedActivity[];
+  linked_runs: SourceLinkedRun[];
 };
 
 export type ActivityEvent = {

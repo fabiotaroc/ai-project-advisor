@@ -2,6 +2,7 @@ import "server-only";
 
 import { embed, generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
+import { extractEmailText } from "@/lib/server/email-ingestion";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 const CHUNK_SIZE = 1200;
@@ -32,26 +33,7 @@ export async function extractText(
       return result.value;
     }
     case ".eml": {
-      const raw = buffer.toString("utf-8");
-      const bodyStart = raw.indexOf("\n\n");
-      if (bodyStart === -1) return raw;
-      const headers = raw.slice(0, bodyStart);
-      let body = raw.slice(bodyStart + 2);
-      body = body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-      const subject = headers.match(/^Subject:\s*(.+)$/im)?.[1] ?? "";
-      const from = headers.match(/^From:\s*(.+)$/im)?.[1] ?? "";
-      const to = headers.match(/^To:\s*(.+)$/im)?.[1] ?? "";
-      const date = headers.match(/^Date:\s*(.+)$/im)?.[1] ?? "";
-      return [
-        subject && `Subject: ${subject}`,
-        from && `From: ${from}`,
-        to && `To: ${to}`,
-        date && `Date: ${date}`,
-        "",
-        body,
-      ]
-        .filter(Boolean)
-        .join("\n");
+      return extractEmailText(buffer);
     }
     case ".md":
     case ".txt":

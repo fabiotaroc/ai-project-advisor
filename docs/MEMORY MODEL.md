@@ -1,6 +1,4 @@
-## Where it lives
-
-Supabase
+This file is inspiration for our app's memory model.
 
 ### Memory Layer (Foundation)
 

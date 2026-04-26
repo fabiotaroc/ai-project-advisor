@@ -14,7 +14,11 @@ import type {
   ProjectRole,
   ProjectSettings,
   ProjectSummary,
+  SourceLinkedActivity,
+  SourceLinkedRun,
   SourceMaterial,
+  SourceMaterialDetail,
+  SourceUploader,
 } from "@/lib/types";
 
 type ProjectAccess = {
@@ -188,18 +192,129 @@ export async function getProjectFiles(projectId: string) {
   return (data ?? []) as ProjectFile[];
 }
 
-export async function getSources(projectId: string) {
+export async function getSources(projectId: string): Promise<SourceMaterialDetail[]> {
   await getProjectForUser(projectId);
+  return getSourceDetailsForProject(projectId);
+}
 
+export async function getSourceDetail(
+  projectId: string,
+  sourceId: string,
+): Promise<SourceMaterialDetail | null> {
+  await getProjectForUser(projectId);
+  const sources = await getSourceDetailsForProject(projectId, [sourceId]);
+  return sources[0] ?? null;
+}
+
+async function getSourceDetailsForProject(
+  projectId: string,
+  filterSourceIds?: string[],
+): Promise<SourceMaterialDetail[]> {
+  if (filterSourceIds?.length === 0) return [];
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("source_materials")
-    .select("*")
+    .select(
+      "id,project_id,type,title,summary,parsed_content,raw_storage_path,metadata,status,uploaded_by,created_at,updated_at",
+    )
     .eq("project_id", projectId)
     .order("created_at", { ascending: false });
 
+  if (filterSourceIds) {
+    query = query.in("id", filterSourceIds);
+  }
+
+  const { data: rows, error } = await query;
+
   if (error) throw error;
-  return (data ?? []) as SourceMaterial[];
+
+  const sources = (rows ?? []) as SourceMaterial[];
+  if (sources.length === 0) return [];
+
+  const sourceIds = sources.map((source) => source.id);
+  const uploaderIds = Array.from(
+    new Set(sources.map((source) => source.uploaded_by).filter((id): id is string => Boolean(id))),
+  );
+
+  const admin = createSupabaseAdminClient();
+
+  const [chunksResult, profilesResult, activityResult, runsResult] = await Promise.all([
+    supabase
+      .from("source_chunks")
+      .select("source_material_id")
+      .in("source_material_id", sourceIds),
+    uploaderIds.length > 0
+      ? admin.from("profiles").select("id,name,email").in("id", uploaderIds)
+      : Promise.resolve({ data: [], error: null } as const),
+    supabase
+      .from("activity_events")
+      .select("id,event_type,summary,created_at,target_id")
+      .eq("project_id", projectId)
+      .eq("target_type", "source_material")
+      .in("target_id", sourceIds)
+      .order("created_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("librarian_runs")
+      .select("id,status,summary,started_at,finished_at,action_count,suggestion_count,trigger_ref")
+      .eq("project_id", projectId)
+      .eq("trigger_type", "source_ingested")
+      .in("trigger_ref", sourceIds)
+      .order("started_at", { ascending: false })
+      .limit(200),
+  ]);
+
+  if (chunksResult.error) throw chunksResult.error;
+  if (profilesResult.error) throw profilesResult.error;
+  if (activityResult.error) throw activityResult.error;
+  if (runsResult.error) throw runsResult.error;
+
+  const chunkCounts = new Map<string, number>();
+  for (const row of chunksResult.data ?? []) {
+    chunkCounts.set(row.source_material_id, (chunkCounts.get(row.source_material_id) ?? 0) + 1);
+  }
+
+  const uploaders = new Map<string, SourceUploader>();
+  for (const row of profilesResult.data ?? []) {
+    uploaders.set(row.id, { id: row.id, name: row.name ?? null, email: row.email });
+  }
+
+  const activityBySource = new Map<string, SourceLinkedActivity[]>();
+  for (const row of activityResult.data ?? []) {
+    if (!row.target_id) continue;
+    const list = activityBySource.get(row.target_id) ?? [];
+    list.push({
+      id: row.id,
+      event_type: row.event_type,
+      summary: row.summary,
+      created_at: row.created_at,
+    });
+    activityBySource.set(row.target_id, list);
+  }
+
+  const runsBySource = new Map<string, SourceLinkedRun[]>();
+  for (const row of runsResult.data ?? []) {
+    if (!row.trigger_ref) continue;
+    const list = runsBySource.get(row.trigger_ref) ?? [];
+    list.push({
+      id: row.id,
+      status: asRunStatus(row.status),
+      summary: row.summary ?? null,
+      started_at: row.started_at,
+      finished_at: row.finished_at ?? null,
+      action_count: typeof row.action_count === "number" ? row.action_count : 0,
+      suggestion_count: typeof row.suggestion_count === "number" ? row.suggestion_count : 0,
+    });
+    runsBySource.set(row.trigger_ref, list);
+  }
+
+  return sources.map((source) => ({
+    ...source,
+    chunk_count: chunkCounts.get(source.id) ?? 0,
+    uploader: source.uploaded_by ? uploaders.get(source.uploaded_by) ?? null : null,
+    linked_activity: activityBySource.get(source.id) ?? [],
+    linked_runs: runsBySource.get(source.id) ?? [],
+  }));
 }
 
 export async function getProjectSettings(projectId: string): Promise<ProjectSettings | null> {

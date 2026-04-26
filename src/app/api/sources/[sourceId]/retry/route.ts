@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOptionalSessionUser } from "@/lib/server/auth";
-import { getProjectAccessForUser } from "@/lib/server/data";
+import { getProjectAccessForUser, getSourceDetail } from "@/lib/server/data";
 import { extractText, ingestSourceMaterial } from "@/lib/server/ingestion";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -61,21 +61,19 @@ export async function POST(
       title: source.title,
     });
 
-    const { data: completed } = await admin
-      .from("source_materials")
-      .select("*")
-      .eq("id", source.id)
-      .single();
+    const completed = await getSourceDetail(source.project_id, source.id);
+    if (!completed) {
+      return NextResponse.json({ error: "Source not found after retry" }, { status: 500 });
+    }
 
     return NextResponse.json({ source: completed });
   } catch (error) {
     console.error("Source retry failed:", sourceId, error);
     await admin.from("source_materials").update({ status: "failed" }).eq("id", source.id);
-    const { data: failed } = await admin
-      .from("source_materials")
-      .select("*")
-      .eq("id", source.id)
-      .single();
+    const failed = await getSourceDetail(source.project_id, source.id);
+    if (!failed) {
+      return NextResponse.json({ error: "Source not found after retry" }, { status: 500 });
+    }
 
     return NextResponse.json({ source: failed }, { status: 200 });
   }

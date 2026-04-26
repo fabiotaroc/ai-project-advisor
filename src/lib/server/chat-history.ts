@@ -1,8 +1,13 @@
 import "server-only";
 
 import type { UIMessage } from "ai";
+import type { ProjectConversationListItem } from "@/lib/types";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  generateChatTitleFromUserMessageText,
+  getHeuristicChatTitle,
+} from "@/lib/server/chats/chat-title";
 
 type ConversationRecord = {
   id: string;
@@ -46,17 +51,6 @@ function getSerializedParts(message: UIMessage) {
   return JSON.parse(JSON.stringify(message.parts)) as unknown[];
 }
 
-function getConversationTitle(messages: UIMessage[]) {
-  const firstUserMessage = messages.find((message) => message.role === "user");
-  const text = firstUserMessage ? getMessageText(firstUserMessage) : "";
-
-  if (!text) {
-    return "New chat";
-  }
-
-  return text.length > 80 ? `${text.slice(0, 77).trimEnd()}...` : text;
-}
-
 function toUIMessage(record: MessageRecord): UIMessage {
   const parts: UIMessage["parts"] = [];
   const storedParts = Array.isArray(record.tool_calls)
@@ -85,7 +79,10 @@ function toUIMessage(record: MessageRecord): UIMessage {
   };
 }
 
-export async function listProjectConversations(projectId: string, userId: string) {
+export async function listProjectConversations(
+  projectId: string,
+  userId: string,
+): Promise<ProjectConversationListItem[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("chats")
@@ -95,7 +92,32 @@ export async function listProjectConversations(projectId: string, userId: string
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as { id: string; title: string; created_at: string }[];
+  const chats = (data ?? []) as { id: string; title: string; created_at: string }[];
+  if (chats.length === 0) return [];
+
+  const ids = chats.map((c) => c.id);
+  const { data: lastRows, error: lastError } = await supabase.rpc("chat_last_message_times", {
+    p_conversation_ids: ids,
+  });
+
+  if (lastError) {
+    throw lastError;
+  }
+
+  const lastById = new Map(
+    (lastRows as { conversation_id: string; last_message_at: string }[] | null | undefined)?.map(
+      (row) => [row.conversation_id, row.last_message_at] as const,
+    ) ?? [],
+  );
+
+  return chats
+    .map((c) => {
+      const lastMsg = lastById.get(c.id);
+      const lastActivity =
+        lastMsg && new Date(lastMsg) > new Date(c.created_at) ? lastMsg : c.created_at;
+      return { ...c, last_activity_at: lastActivity };
+    })
+    .sort((a, b) => (a.last_activity_at < b.last_activity_at ? 1 : -1));
 }
 
 export async function getLatestConversation(projectId: string, userId: string) {
@@ -271,7 +293,7 @@ async function shouldAutoUpdateConversationTitle(conversationId: string) {
     return true;
   }
 
-  const generatedTitle = getConversationTitle(((messages ?? []) as MessageRecord[]).map(toUIMessage));
+  const generatedTitle = getHeuristicChatTitle(((messages ?? []) as MessageRecord[]).map(toUIMessage));
   return currentTitle === generatedTitle;
 }
 
@@ -296,7 +318,7 @@ export async function getOrCreateProjectConversation(
   const existing = await getLatestConversation(projectId, userId);
   if (existing) return existing;
 
-  return createConversation(projectId, userId, getConversationTitle(seedMessages));
+  return createConversation(projectId, userId, getHeuristicChatTitle(seedMessages));
 }
 
 export async function replaceConversationMessages(conversationId: string, messages: UIMessage[]) {
@@ -328,9 +350,12 @@ export async function replaceConversationMessages(conversationId: string, messag
   }
 
   if (shouldUpdateTitle) {
+    const firstUser = messages.find((m) => m.role === "user");
+    const userText = firstUser ? getMessageText(firstUser) : "";
+    const nextTitle = userText ? await generateChatTitleFromUserMessageText(userText) : "New chat";
     const { error: updateError } = await supabase
       .from("chats")
-      .update({ title: getConversationTitle(messages) })
+      .update({ title: nextTitle })
       .eq("id", conversationId);
 
     if (updateError) {

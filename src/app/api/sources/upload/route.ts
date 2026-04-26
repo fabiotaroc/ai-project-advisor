@@ -1,6 +1,6 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { getOptionalSessionUser } from "@/lib/server/auth";
-import { getProjectAccessForUser } from "@/lib/server/data";
+import { getProjectAccessForUser, getSourceDetail } from "@/lib/server/data";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { extractText, ingestSourceMaterial } from "@/lib/server/ingestion";
 import { triggerOnSourceIngested } from "@/lib/server/librarian/triggers";
@@ -83,21 +83,19 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    const { data: completed } = await admin
-      .from("source_materials")
-      .select("*")
-      .eq("id", source.id)
-      .single();
+    const completed = await getSourceDetail(projectId, source.id);
+    if (!completed) {
+      return NextResponse.json({ error: "Uploaded source not found" }, { status: 500 });
+    }
 
     return NextResponse.json({ source: completed });
   } catch (error) {
     console.error("Upload processing failed:", error);
     await admin.from("source_materials").update({ status: "failed" }).eq("id", source.id);
-    const { data: failed } = await admin
-      .from("source_materials")
-      .select("*")
-      .eq("id", source.id)
-      .single();
+    const failed = await getSourceDetail(projectId, source.id);
+    if (!failed) {
+      return NextResponse.json({ error: "Uploaded source not found" }, { status: 500 });
+    }
 
     return NextResponse.json({ source: failed }, { status: 200 });
   }

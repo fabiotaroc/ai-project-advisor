@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getOptionalSessionUser } from "@/lib/server/auth";
-import { getProjectAccessForUser } from "@/lib/server/data";
+import { getProjectAccessForUser, getSourceDetail } from "@/lib/server/data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const schema = z.object({
@@ -43,5 +43,10 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  return NextResponse.json({ source: data });
+  const source = await getSourceDetail(body.projectId, data.id);
+  if (!source) {
+    return NextResponse.json({ error: "Source not found after creation" }, { status: 500 });
+  }
+
+  return NextResponse.json({ source });
 }

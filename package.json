@@ -19,6 +19,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "lucide-react": "^1.8.0",
+    "mailparser": "^3.9.8",
     "mammoth": "^1.12.0",
     "next": "16.2.2",
     "next-themes": "^0.4.6",
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/mailparser": "^3.4.6",
     "@types/node": "^20",
     "@types/pdf-parse": "^1.1.5",
     "@types/react": "^19",

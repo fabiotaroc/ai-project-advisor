@@ -42,6 +42,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
+import { formatChatListTime } from "@/lib/date-format";
+import type { ProjectConversationListItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const primaryLinks = [
@@ -50,11 +52,7 @@ const primaryLinks = [
   { key: "activity", label: "Activity", icon: Activity },
 ] as const;
 
-type ConversationSummary = {
-  id: string;
-  title: string;
-  created_at: string;
-};
+type ConversationSummary = ProjectConversationListItem;
 
 const CONVERSATION_NAVIGATION_DELAY_MS = 180;
 
@@ -455,7 +453,12 @@ export function ProjectSidebar({
                               {getConversationInitial(c.title)}
                             </button>
                           </TooltipTrigger>
-                          <TooltipContent side="right">{c.title}</TooltipContent>
+                          <TooltipContent side="right">
+                            <span className="block font-medium">{c.title}</span>
+                            <span className="text-muted-foreground">
+                              {formatChatListTime(c.last_activity_at ?? c.created_at)}
+                            </span>
+                          </TooltipContent>
                         </Tooltip>
                       );
                     })
@@ -544,14 +547,14 @@ export function ProjectSidebar({
                                 onClick={() => scheduleConversationNavigation(c.id)}
                                 disabled={isPending}
                                 className={cn(
-                                  "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 pr-10 text-left text-sm transition-colors",
+                                  "flex w-full flex-col items-stretch gap-0.5 rounded-lg px-2.5 py-2 pr-10 text-left text-sm transition-colors",
                                   isActive
                                     ? "bg-accent text-foreground"
-                                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                                    : "text-foreground hover:bg-accent",
                                 )}
                               >
                                 <span
-                                  className="truncate"
+                                  className="min-w-0 truncate"
                                   title={c.title}
                                   onDoubleClick={(event) => {
                                     event.preventDefault();
@@ -560,6 +563,15 @@ export function ProjectSidebar({
                                   }}
                                 >
                                   {truncateConversationTitle(c.title)}
+                                </span>
+                                <span
+                                  className={cn(
+                                    "font-mono text-[11px] leading-none tabular-nums",
+                                    isActive ? "text-foreground/60" : "text-muted-foreground",
+                                  )}
+                                  title={c.last_activity_at ?? c.created_at}
+                                >
+                                  {formatChatListTime(c.last_activity_at ?? c.created_at)}
                                 </span>
                               </button>
 
