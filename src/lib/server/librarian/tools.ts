@@ -4,6 +4,7 @@ import { embed, tool } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { buildSourceDisplayExcerpt } from "@/lib/server/source-snippets";
 import {
   createProjectFile,
   deleteProjectFile,
@@ -289,7 +290,7 @@ export function buildLibrarianTools(
     }),
     search_sources: tool({
       description:
-        "Semantic search across ingested source material chunks. Use returned source_material_id values with read_source.",
+        "Semantic search across ingested source material chunks. Use returned source_material_id values with read_source; returned chunk_id values are stable source anchors.",
       inputSchema: z.object({ query: z.string().min(2) }),
       execute: async ({ query }) => {
         const { embedding: queryEmbedding } = await embed({
@@ -315,11 +316,14 @@ export function buildLibrarianTools(
         ];
         const { data: sources } = await admin
           .from("source_materials")
-          .select("id,title")
+          .select("id,title,parsed_content")
           .in("id", sourceIds);
 
-        const titleMap = new Map(
-          (sources ?? []).map((s) => [s.id, s.title] as const),
+        const sourceMap = new Map(
+          (sources ?? []).map((source) => [
+            source.id,
+            { title: source.title, parsedContent: source.parsed_content },
+          ] as const),
         );
 
         return data.map(
@@ -328,12 +332,20 @@ export function buildLibrarianTools(
             source_material_id: string;
             content: string;
             similarity: number;
+            char_start: number | null;
+            char_end: number | null;
           }) => ({
             chunk_id: chunk.chunk_id,
             source_material_id: chunk.source_material_id,
-            source_title: titleMap.get(chunk.source_material_id) ?? "Unknown",
+            source_title: sourceMap.get(chunk.source_material_id)?.title ?? "Unknown",
             content: chunk.content,
+            excerpt: buildSourceDisplayExcerpt({
+              content: chunk.content,
+              fullText: sourceMap.get(chunk.source_material_id)?.parsedContent,
+            }),
             similarity: chunk.similarity,
+            char_start: chunk.char_start,
+            char_end: chunk.char_end,
           }),
         );
       },

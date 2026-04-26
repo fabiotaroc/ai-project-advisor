@@ -30,7 +30,7 @@ Main mismatches:
 - Chat has tool traces, but not the full design-system pattern: numbered citations, citation rail, memory drafts, and AI surface treatment.
 - Sources are functional, but the design-system wants sources to be the hero: summaries, key facts, linked artifacts, references in conversations, and direct actions.
 
-## Priority 0: Quick Wins
+## Priority 0: Quick Wins (Done)
 
 These are low-risk changes that would make the app immediately feel closer to the design system.
 

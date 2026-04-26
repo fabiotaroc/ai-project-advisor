@@ -279,7 +279,8 @@ export function ProjectSidebar({
     <TooltipProvider delayDuration={0}>
       <aside
         className={cn(
-          "sticky top-12 flex h-[calc(100vh-3rem)] shrink-0 flex-col self-start border-r border-border bg-sidebar transition-[width] duration-200",
+          "sticky top-12 flex h-[calc(100vh-3rem)] shrink-0 flex-col self-start bg-sidebar transition-[width] duration-200",
+          segment !== "chat" && "border-r border-border",
           collapsed ? "w-14" : "w-72",
         )}
       >

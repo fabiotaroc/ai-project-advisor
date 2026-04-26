@@ -4,6 +4,7 @@ import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import { getOptionalSessionUser } from "@/lib/server/auth";
 import { getProjectAccessForUser } from "@/lib/server/data";
+import { buildSourceDisplayExcerpt } from "@/lib/server/source-snippets";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const schema = z.object({ projectId: z.string().uuid(), query: z.string().min(2) });
@@ -46,17 +47,36 @@ export async function POST(request: NextRequest) {
         const sourceIds = [...new Set(data.map((d: { source_material_id: string }) => d.source_material_id))];
         const { data: sources } = await supabase
           .from("source_materials")
-          .select("id,title")
+          .select("id,title,parsed_content")
           .in("id", sourceIds);
 
-        const titleMap = new Map((sources ?? []).map((s) => [s.id, s.title]));
+        const sourceMap = new Map(
+          (sources ?? []).map((source) => [
+            source.id,
+            { title: source.title, parsedContent: source.parsed_content },
+          ]),
+        );
 
-        return data.map((chunk: { chunk_id: string; source_material_id: string; content: string; similarity: number }) => ({
+        return data.map((chunk: {
+          chunk_id: string;
+          source_material_id: string;
+          content: string;
+          similarity: number;
+          char_start: number | null;
+          char_end: number | null;
+        }) => ({
           type: "source" as const,
           id: chunk.chunk_id,
-          title: titleMap.get(chunk.source_material_id) ?? "Source",
-          excerpt: chunk.content.slice(0, 280),
+          sourceMaterialId: chunk.source_material_id,
+          title: sourceMap.get(chunk.source_material_id)?.title ?? "Source",
+          excerpt: buildSourceDisplayExcerpt({
+            content: chunk.content,
+            fullText: sourceMap.get(chunk.source_material_id)?.parsedContent,
+            maxLength: 280,
+          }),
           similarity: chunk.similarity,
+          charStart: chunk.char_start,
+          charEnd: chunk.char_end,
         }));
       } catch {
         return [];

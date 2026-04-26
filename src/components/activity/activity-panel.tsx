@@ -1,21 +1,9 @@
-import type { LucideIcon } from "lucide-react";
-import {
-  Activity,
-  Bot,
-  CheckCircle2,
-  CircleDashed,
-  Clock3,
-  FilePlus2,
-  FileText,
-  Lightbulb,
-  MessageSquare,
-  MoveRight,
-  Pencil,
-  Sparkles,
-  Trash2,
-  TriangleAlert,
-  Upload,
-} from "lucide-react";
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ChevronRight, FileText, Lightbulb, Upload } from "lucide-react";
 import type {
   ActivityEvent,
   LibrarianAction,
@@ -24,9 +12,19 @@ import type {
   ProjectActivity,
 } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { formatDateTime, formatRelative } from "@/lib/date-format";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { formatChatListTime, formatDateTime } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
+import {
+  ACTION_ICONS,
+  STATUS_COPY,
+  TRIGGER_META,
+  TriggerGlyph,
+  eventMeta,
+  parseRunSummary,
+  subjectLabel,
+} from "@/components/activity/activity-shared";
 
 type TimelineItem =
   | {
@@ -42,330 +40,613 @@ type TimelineItem =
       event: ActivityEvent;
     };
 
-type ParsedRunSummary = {
-  subject: string | null;
-  counts: string | null;
-  body: string | null;
-};
+export function ActivityPanel({
+  activity,
+  projectId,
+}: {
+  activity: ProjectActivity;
+  projectId: string;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const runParam = searchParams.get("run");
+  const eventParam = searchParams.get("event");
 
-const runStatusStyles: Record<
-  LibrarianRun["status"],
-  {
-    label: string;
-    dot: string;
-    rail: string;
-    badge: string;
-    Icon: LucideIcon;
-  }
-> = {
-  succeeded: {
-    label: "Succeeded",
-    dot: "bg-success",
-    rail: "border-l-success",
-    badge: "border-success-line bg-success-soft text-success",
-    Icon: CheckCircle2,
-  },
-  running: {
-    label: "Running",
-    dot: "bg-primary",
-    rail: "border-l-primary",
-    badge: "border-accent-line bg-accent-soft text-accent-ink",
-    Icon: CircleDashed,
-  },
-  failed: {
-    label: "Failed",
-    dot: "bg-destructive",
-    rail: "border-l-destructive",
-    badge: "border-destructive-line bg-destructive-soft text-destructive",
-    Icon: TriangleAlert,
-  },
-};
-
-const triggerStyles: Record<
-  LibrarianRun["trigger_type"],
-  {
-    title: string;
-    Icon: LucideIcon;
-    icon: string;
-  }
-> = {
-  conversation_ended: {
-    title: "Advisor memory pass",
-    Icon: MessageSquare,
-    icon: "bg-accent-soft text-accent-ink ring-accent-line",
-  },
-  source_ingested: {
-    title: "Source integration",
-    Icon: Upload,
-    icon: "bg-accent-soft text-accent-ink ring-accent-line",
-  },
-  wiki_lint: {
-    title: "Memory cleanup",
-    Icon: Sparkles,
-    icon: "bg-warning-soft text-warning ring-warning-line",
-  },
-};
-
-const actionIcons: Record<LibrarianAction["action"], LucideIcon> = {
-  create: FilePlus2,
-  edit: Pencil,
-  rename: MoveRight,
-  delete: Trash2,
-};
-
-export function ActivityPanel({ activity }: { activity: ProjectActivity }) {
   const relatedEventsByRun = groupLibrarianEvents(activity.events);
   const genericEvents = activity.events.filter((event) => !isGroupedLibrarianEvent(event));
-  const timelineItems: TimelineItem[] = [
-    ...activity.librarianRuns.map((run) => ({
-      kind: "librarian" as const,
-      id: run.id,
-      timestamp: run.finished_at ?? run.started_at,
-      run,
-    })),
-    ...genericEvents.map((event) => ({
-      kind: "event" as const,
-      id: event.id,
-      timestamp: event.created_at,
-      event,
-    })),
-  ].sort(
-    (left, right) =>
-      new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime(),
+
+  const timelineItems = useMemo<TimelineItem[]>(() => {
+    const generic = activity.events.filter((event) => !isGroupedLibrarianEvent(event));
+    return [
+      ...activity.librarianRuns.map((run) => ({
+        kind: "librarian" as const,
+        id: run.id,
+        timestamp: run.finished_at ?? run.started_at,
+        run,
+      })),
+      ...generic.map((event) => ({
+        kind: "event" as const,
+        id: event.id,
+        timestamp: event.created_at,
+        event,
+      })),
+    ].sort(
+      (left, right) =>
+        new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime(),
+    );
+  }, [activity.librarianRuns, activity.events]);
+
+  const groups = useMemo(() => groupByDay(timelineItems), [timelineItems]);
+
+  const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
+  const [dayExpanded, setDayExpanded] = useState<Record<string, boolean>>({});
+  const rowRefs = useRef(new Map<string, HTMLElement>());
+
+  const registerRow = useCallback((key: string, element: HTMLElement | null) => {
+    if (element) {
+      rowRefs.current.set(key, element);
+    } else {
+      rowRefs.current.delete(key);
+    }
+  }, []);
+
+  const clearActivityParams = useCallback(() => {
+    if (!runParam && !eventParam) return;
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("run");
+    next.delete("event");
+    const query = next.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [eventParam, pathname, router, runParam, searchParams]);
+
+  useEffect(() => {
+    if (!runParam && !eventParam) return;
+
+    let key: string | null = null;
+    if (runParam && activity.librarianRuns.some((run) => run.id === runParam)) {
+      key = `librarian-${runParam}`;
+    } else if (eventParam) {
+      const event = activity.events.find((candidate) => candidate.id === eventParam);
+      if (event) {
+        if (isGroupedLibrarianEvent(event)) {
+          const runId = runIdForEvent(event);
+          if (runId && activity.librarianRuns.some((run) => run.id === runId)) {
+            key = `librarian-${runId}`;
+          }
+        } else {
+          key = `event-${eventParam}`;
+        }
+      }
+    }
+
+    if (key) {
+      setHighlightedKey(key);
+      const dayKey = findGroupKeyForRow(groups, key);
+      if (dayKey) {
+        setDayExpanded((prev) => ({ ...prev, [dayKey]: true }));
+      }
+      const scrollToTarget = () => {
+        const target = rowRefs.current.get(key);
+        if (target) {
+          if (target instanceof HTMLDetailsElement) target.open = true;
+          target.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      };
+      requestAnimationFrame(() => {
+        requestAnimationFrame(scrollToTarget);
+      });
+    }
+
+    clearActivityParams();
+  }, [activity.events, activity.librarianRuns, clearActivityParams, eventParam, runParam, groups]);
+
+  const handleRowClick = useCallback((key: string) => {
+    setHighlightedKey((current) => (current === key ? current : null));
+  }, []);
+
+  const collapseAllDays = useCallback(() => {
+    setDayExpanded((prev) => {
+      const next = { ...prev };
+      for (const group of groups) {
+        next[group.key] = false;
+      }
+      return next;
+    });
+  }, [groups]);
+
+  const expandAllDays = useCallback(() => {
+    setDayExpanded((prev) => {
+      const next = { ...prev };
+      for (const group of groups) {
+        next[group.key] = true;
+      }
+      return next;
+    });
+  }, [groups]);
+
+  const allDaysCollapsed = useMemo(
+    () => groups.length > 0 && groups.every((group) => dayExpanded[group.key] === false),
+    [groups, dayExpanded],
   );
 
-  const latestRun = activity.librarianRuns[0] ?? null;
-
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Activity</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {timelineItems.length} event{timelineItems.length === 1 ? "" : "s"} recorded
-          </p>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-10 sm:px-10">
+      <header className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h1 className="text-3xl font-medium tracking-[-0.02em]">Activity</h1>
+          {timelineItems.length > 0 && groups.length > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="-my-0.5 h-6 px-2 text-[11px] font-normal text-muted-foreground hover:text-foreground"
+              onClick={allDaysCollapsed ? expandAllDays : collapseAllDays}
+              aria-label={allDaysCollapsed ? "Expand all days" : "Collapse all days"}
+            >
+              {allDaysCollapsed ? "Expand all" : "Collapse all"}
+            </Button>
+          ) : null}
         </div>
-        {latestRun ? (
-          <Badge variant="outline" className="h-7 gap-1.5 rounded-md px-2.5">
-            <Bot className="size-3.5" />
-            Last Advisor memory pass {formatRelative(latestRun.finished_at ?? latestRun.started_at)}
-          </Badge>
-        ) : null}
-      </div>
+        <p className="text-[15px] text-muted-foreground">
+          What changed in this project — drafts the advisor proposed, sources you added, files
+          it edited.
+        </p>
+      </header>
 
       {timelineItems.length > 0 ? (
-        <ol className="relative flex flex-col gap-3 before:absolute before:bottom-3 before:left-4 before:top-3 before:w-px before:bg-border sm:before:left-5">
-          {timelineItems.map((item) => (
-            <li key={`${item.kind}-${item.id}`} className="relative pl-9 sm:pl-12">
-              {item.kind === "librarian" ? (
-                <LibrarianRunCard
-                  run={item.run}
-                  relatedEvents={relatedEventsByRun.get(item.run.id) ?? []}
-                />
-              ) : (
-                <GenericEventCard event={item.event} />
-              )}
-            </li>
-          ))}
-        </ol>
+        <Card className="overflow-hidden rounded-xl border-border bg-card p-0 shadow-none">
+          <ol className="divide-y divide-border">
+            {groups.map((group) => (
+              <li key={group.key}>
+                <details
+                  className="group/day"
+                  open={dayExpanded[group.key] !== false}
+                  onToggle={(event) => {
+                    const details = event.currentTarget;
+                    setDayExpanded((prev) => {
+                      const nextOpen =
+                        details != null
+                          ? details.open
+                          : !(prev[group.key] !== false);
+                      return { ...prev, [group.key]: nextOpen };
+                    });
+                  }}
+                >
+                  <summary
+                    className={cn(
+                      "flex cursor-pointer list-none items-baseline justify-between border-b border-border bg-muted/30 px-5 py-2",
+                      "[&::-webkit-details-marker]:hidden",
+                    )}
+                  >
+                    <span className="flex items-baseline gap-2">
+                      <ChevronRight
+                        className="size-3.5 shrink-0 translate-y-[1px] text-muted-foreground transition-transform group-open/day:rotate-90"
+                        strokeWidth={1.75}
+                      />
+                      <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-muted-foreground">
+                        {group.label}
+                      </span>
+                    </span>
+                    <span className="font-mono text-[10.5px] text-muted-foreground/70">
+                      {group.items.length} update{group.items.length === 1 ? "" : "s"}
+                    </span>
+                  </summary>
+                  <ol className="divide-y divide-border">
+                    {group.items.map((item) => {
+                      const rowKey = `${item.kind}-${item.id}`;
+                      const isHighlighted = highlightedKey === rowKey;
+                      return (
+                        <li key={rowKey}>
+                          {item.kind === "librarian" ? (
+                            <LibrarianRow
+                              run={item.run}
+                              relatedEvents={relatedEventsByRun.get(item.run.id) ?? []}
+                              projectId={projectId}
+                              rowKey={rowKey}
+                              highlighted={isHighlighted}
+                              onRegister={registerRow}
+                              onClick={handleRowClick}
+                            />
+                          ) : (
+                            <EventRow
+                              event={item.event}
+                              projectId={projectId}
+                              rowKey={rowKey}
+                              highlighted={isHighlighted}
+                              onRegister={registerRow}
+                              onClick={handleRowClick}
+                            />
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </details>
+              </li>
+            ))}
+          </ol>
+        </Card>
       ) : (
-        <Card className="rounded-lg border-dashed py-0">
-          <CardContent className="flex min-h-40 items-center justify-center px-4 py-8 text-sm text-muted-foreground">
-            No activity has been recorded for this project yet.
-          </CardContent>
+        <Card className="rounded-xl border-dashed bg-card/60 p-10 text-center text-sm text-muted-foreground">
+          Nothing has happened yet. Once the advisor reads a source or finishes a chat, you&apos;ll
+          see updates here.
         </Card>
       )}
     </div>
   );
 }
 
-function LibrarianRunCard({
+type RowHighlightProps = {
+  rowKey: string;
+  highlighted: boolean;
+  onRegister: (key: string, element: HTMLElement | null) => void;
+  onClick: (key: string) => void;
+};
+
+function LibrarianRow({
   run,
   relatedEvents,
+  projectId,
+  rowKey,
+  highlighted,
+  onRegister,
+  onClick,
 }: {
   run: LibrarianRun;
   relatedEvents: ActivityEvent[];
-}) {
-  const status = runStatusStyles[run.status];
-  const trigger = triggerStyles[run.trigger_type];
+  projectId: string;
+} & RowHighlightProps) {
+  const status = STATUS_COPY[run.status];
+  const trigger = TRIGGER_META[run.trigger_type];
   const parsed = parseRunSummary(run.summary);
   const subject = subjectLabel(parsed.subject);
-  const summary = parsed.body ?? run.error ?? run.summary ?? "No summary was recorded.";
-  const actions = run.actions.slice(0, 6);
+  const summary = parsed.body ?? run.error ?? null;
+  const headline = (
+    <>
+      <span className="font-medium text-foreground">{trigger.label}</span>
+      {subject ? (
+        <>
+          <span className="mx-1.5 text-muted-foreground">·</span>
+          <span className="text-muted-foreground">{subject}</span>
+        </>
+      ) : null}
+    </>
+  );
+  const actions = run.actions.slice(0, 8);
   const hiddenActionCount = Math.max(run.actions.length - actions.length, 0);
   const suggestions = suggestionsForRun(run, relatedEvents).slice(0, 3);
-  const files = filesForRun(run).slice(0, 8);
-  const StatusIcon = status.Icon;
-  const TriggerIcon = trigger.Icon;
+  const files = filesForRun(run);
+  const totalActions = runActionCount(run);
+  const totalFiles = files.length;
+  const totalSuggestions = Math.max(run.suggestion_count, suggestions.length);
+  const hasDetail = actions.length > 0 || suggestions.length > 0 || (files.length > 0 && actions.length === 0) || Boolean(summary);
+  const proposalLabel = run.mode === "proposal" ? "Proposal" : null;
+  const subjectHref = subjectHrefFor(run, projectId);
+
+  const metaLine = [
+    durationLabel(run),
+    totalActions ? `${totalActions} change${totalActions === 1 ? "" : "s"}` : null,
+    totalFiles ? `${totalFiles} file${totalFiles === 1 ? "" : "s"}` : null,
+    totalSuggestions ? `${totalSuggestions} suggestion${totalSuggestions === 1 ? "" : "s"}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
-    <>
+    <Row
+      rowKey={rowKey}
+      highlighted={highlighted}
+      onRegister={onRegister}
+      onClick={onClick}
+      timestamp={run.finished_at ?? run.started_at}
+      glyph={<TriggerGlyph Icon={trigger.Icon} status={run.status} />}
+      glyphTone="ai"
+      headline={
+        subjectHref ? (
+          <Link href={subjectHref} className="hover:underline underline-offset-2">
+            {headline}
+          </Link>
+        ) : (
+          headline
+        )
+      }
+      sub={metaLine || null}
+      pill={
+        <div className="flex items-center gap-1.5">
+          {proposalLabel ? (
+            <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10.5px] font-medium uppercase tracking-[0.08em]">
+              {proposalLabel}
+            </Badge>
+          ) : null}
+          <Badge variant={status.variant} className="rounded-md px-1.5 py-0 text-[10.5px] font-medium uppercase tracking-[0.08em]">
+            {status.label}
+          </Badge>
+        </div>
+      }
+      details={
+        hasDetail ? (
+          <RunDetails
+            summary={summary}
+            actions={actions}
+            hiddenActionCount={hiddenActionCount}
+            files={files}
+            suggestions={suggestions}
+          />
+        ) : null
+      }
+    />
+  );
+}
+
+function EventRow({
+  event,
+  projectId,
+  rowKey,
+  highlighted,
+  onRegister,
+  onClick,
+}: { event: ActivityEvent; projectId: string } & RowHighlightProps) {
+  const meta = eventMeta(event);
+  const href = eventHrefFor(event, projectId);
+
+  return (
+    <Row
+      rowKey={rowKey}
+      highlighted={highlighted}
+      onRegister={onRegister}
+      onClick={onClick}
+      timestamp={event.created_at}
+      glyph={
+        <span className="grid h-full w-full place-items-center text-muted-foreground">
+          <meta.Icon className="size-3.5" strokeWidth={1.75} />
+        </span>
+      }
+      glyphTone="quiet"
+      headline={
+        href ? (
+          <Link href={href} className="hover:underline underline-offset-2">
+            {meta.label}
+          </Link>
+        ) : (
+          meta.label
+        )
+      }
+      sub={event.summary || null}
+      pill={null}
+      details={null}
+    />
+  );
+}
+
+function Row({
+  rowKey,
+  highlighted,
+  onRegister,
+  onClick,
+  timestamp,
+  glyph,
+  glyphTone,
+  headline,
+  sub,
+  pill,
+  details,
+}: {
+  timestamp: string;
+  glyph: React.ReactNode;
+  glyphTone: "ai" | "quiet";
+  headline: React.ReactNode;
+  sub: React.ReactNode;
+  pill: React.ReactNode;
+  details: React.ReactNode;
+} & RowHighlightProps) {
+  return (
+    <details
+      ref={(node) => onRegister(rowKey, node)}
+      className={cn(
+        "group/row relative block transition-colors",
+        highlighted && "bg-cite-bg/50 ring-1 ring-inset ring-accent-line/60",
+      )}
+    >
       <span
+        aria-hidden
         className={cn(
-          "absolute left-[0.84rem] top-5 z-10 size-3 rounded-full ring-4 ring-background sm:left-[1.1rem]",
-          status.dot,
+          "pointer-events-none absolute inset-y-0 left-0 w-0.5 transition-colors",
+          highlighted ? "bg-ring" : "bg-transparent",
         )}
       />
-      <Card className={cn("rounded-lg border-l-4 py-0 shadow-sm", status.rail)}>
-        <CardContent className="px-4 py-4">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-start gap-3">
-              <div
-                className={cn(
-                  "flex size-10 shrink-0 items-center justify-center rounded-lg ring-1",
-                  trigger.icon,
-                )}
-              >
-                <TriggerIcon className="size-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-base font-semibold leading-tight">{trigger.title}</h2>
-                  <Badge variant="outline" className={cn("rounded-md", status.badge)}>
-                    <StatusIcon className="size-3" />
-                    {status.label}
-                  </Badge>
-                  <Badge variant="outline" className="rounded-md capitalize">
-                    {run.mode}
-                  </Badge>
-                </div>
-                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <Clock3 className="size-3" />
-                    {formatDateTime(run.finished_at ?? run.started_at)}
-                  </span>
-                  <span>{durationLabel(run)}</span>
-                  {subject ? <span className="min-w-0 truncate">{subject}</span> : null}
-                </div>
-              </div>
-            </div>
+      <summary
+        onClick={() => onClick(rowKey)}
+        className={cn(
+          "flex cursor-pointer list-none items-start gap-3 px-5 py-3.5 transition-colors",
+          "hover:bg-muted/30",
+          "[&::-webkit-details-marker]:hidden",
+          details ? "" : "cursor-default",
+        )}
+      >
+        <span
+          className="mt-[3px] w-[78px] shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground"
+          title={formatDateTime(timestamp)}
+        >
+          {formatChatListTime(timestamp)}
+        </span>
+        <span
+          className={cn(
+            "mt-[1px] grid size-[22px] shrink-0 place-items-center rounded-md border text-[11px]",
+            glyphTone === "ai"
+              ? "border-foreground bg-foreground text-background"
+              : "border-border bg-muted/50",
+          )}
+        >
+          {glyph}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start gap-2">
+            <p className="min-w-0 flex-1 text-[13.5px] leading-[1.45] text-foreground">{headline}</p>
+            {pill}
+            {details ? (
+              <ChevronRight
+                className="mt-[3px] size-3.5 shrink-0 text-muted-foreground transition-transform group-open/row:rotate-90"
+                strokeWidth={1.75}
+              />
+            ) : null}
+          </div>
+          {sub ? (
+            <p className="mt-1 line-clamp-2 text-[12px] leading-[1.45] text-muted-foreground">{sub}</p>
+          ) : null}
+        </div>
+      </summary>
+      {details ? <div className="px-5 pb-5 pl-[112px]">{details}</div> : null}
+    </details>
+  );
+}
 
-            <p className="line-clamp-3 text-sm leading-6 text-foreground/90">{summary}</p>
+function RunDetails({
+  summary,
+  actions,
+  hiddenActionCount,
+  files,
+  suggestions,
+}: {
+  summary: string | null;
+  actions: LibrarianAction[];
+  hiddenActionCount: number;
+  files: string[];
+  suggestions: LibrarianSuggestion[];
+}) {
+  return (
+    <div className="flex flex-col gap-3 pt-1">
+      {summary ? (
+        <p className="text-[13px] leading-[1.55] text-foreground/85">{summary}</p>
+      ) : null}
 
-            <div className="flex flex-wrap gap-2">
-              <MetricPill label="Actions" value={runActionCount(run)} />
-              <MetricPill label="Files" value={filesForRun(run).length} />
-              <MetricPill label="Suggestions" value={Math.max(run.suggestion_count, suggestionsForRun(run, relatedEvents).length)} />
-              {parsed.counts ? <span className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">{parsed.counts}</span> : null}
-            </div>
+      {actions.length > 0 ? (
+        <ul className="flex flex-col gap-1">
+          {actions.map((action, index) => (
+            <ActionLine key={`${action.action}-${action.path}-${index}`} action={action} />
+          ))}
+          {hiddenActionCount > 0 ? (
+            <li className="font-mono text-[11px] text-muted-foreground/80">
+              + {hiddenActionCount} more change{hiddenActionCount === 1 ? "" : "s"}
+            </li>
+          ) : null}
+        </ul>
+      ) : files.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {files.map((file) => (
+            <span
+              key={file}
+              className="rounded-md border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
+            >
+              {file}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
-            {actions.length > 0 ? (
-              <div className="grid gap-2 md:grid-cols-2">
-                {actions.map((action, index) => (
-                  <ActionRow key={`${action.action}-${action.path}-${index}`} action={action} />
-                ))}
-                {hiddenActionCount > 0 ? (
-                  <div className="rounded-lg border border-dashed border-border/80 px-3 py-2 text-xs text-muted-foreground">
-                    +{hiddenActionCount} more action{hiddenActionCount === 1 ? "" : "s"}
-                  </div>
+      {suggestions.length > 0 ? (
+        <ul className="flex flex-col gap-1.5">
+          {suggestions.map((suggestion, index) => (
+            <li
+              key={`${suggestion.kind}-${suggestion.title}-${index}`}
+              className="flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft/60 px-2.5 py-1.5 text-[12.5px] text-warning"
+            >
+              <Lightbulb className="mt-[3px] size-3.5 shrink-0" strokeWidth={1.75} />
+              <div className="min-w-0">
+                <span className="font-medium">{suggestion.title}</span>
+                {suggestion.rationale ? (
+                  <span className="ml-1 text-warning/80">— {suggestion.rationale}</span>
                 ) : null}
               </div>
-            ) : files.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {files.map((file) => (
-                  <span
-                    key={file}
-                    className="rounded-md bg-muted px-2 py-1 font-mono text-[11px] text-muted-foreground"
-                  >
-                    {file}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-
-            {suggestions.length > 0 ? (
-              <div className="grid gap-2">
-                {suggestions.map((suggestion, index) => (
-                  <SuggestionRow
-                    key={`${suggestion.kind}-${suggestion.title}-${index}`}
-                    suggestion={suggestion}
-                  />
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
-    </>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
-function GenericEventCard({ event }: { event: ActivityEvent }) {
-  const theme = eventTheme(event.event_type);
-  const Icon = theme.Icon;
-
-  return (
-    <>
-      <span
-        className={cn(
-          "absolute left-[0.84rem] top-5 z-10 size-3 rounded-full ring-4 ring-background sm:left-[1.1rem]",
-          theme.dot,
-        )}
-      />
-      <Card className={cn("rounded-lg border-l-4 py-0 shadow-sm", theme.rail)}>
-        <CardContent className="flex items-start gap-3 px-4 py-3.5">
-          <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg", theme.icon)}>
-            <Icon className="size-4" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-sm font-semibold">{eventLabel(event.event_type)}</h2>
-              <Badge variant="outline" className="rounded-md text-[11px]">
-                {formatEventType(event.event_type)}
-              </Badge>
-            </div>
-            <p className="mt-1 line-clamp-2 text-sm leading-6 text-foreground/90">{event.summary}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(event.created_at)}</p>
-          </div>
-        </CardContent>
-      </Card>
-    </>
-  );
-}
-
-function ActionRow({ action }: { action: LibrarianAction }) {
-  const Icon = actionIcons[action.action];
+function ActionLine({ action }: { action: LibrarianAction }) {
+  const Icon = ACTION_ICONS[action.action];
   const reason = typeof action.details?.reason === "string" ? action.details.reason : null;
   const proposed = action.details?.proposed === true;
 
   return (
-    <div className="flex min-w-0 items-start gap-2 rounded-lg border border-border/70 bg-muted/25 px-3 py-2">
-      <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground">
-        <Icon className="size-3.5" />
-      </div>
-      <div className="min-w-0">
-        <p className="truncate font-mono text-xs font-medium">
-          {proposed ? "Proposed " : ""}
-          {actionLabel(action.action)} {action.path}
-        </p>
-        {reason ? <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{reason}</p> : null}
-      </div>
-    </div>
+    <li className="flex min-w-0 items-baseline gap-2 font-mono text-[11.5px]">
+      <Icon className="size-3 shrink-0 translate-y-[1.5px] text-muted-foreground" strokeWidth={1.75} />
+      <span className="text-muted-foreground">
+        {proposed ? "proposed " : ""}
+        {actionVerb(action.action)}
+      </span>
+      <span className="truncate text-foreground">{action.path}</span>
+      {reason ? <span className="hidden truncate text-muted-foreground/80 sm:inline">— {reason}</span> : null}
+    </li>
   );
 }
 
-function SuggestionRow({ suggestion }: { suggestion: LibrarianSuggestion }) {
-  return (
-    <div className="flex items-start gap-2 rounded-lg border border-warning-line bg-warning-soft px-3 py-2 text-warning">
-      <Lightbulb className="mt-0.5 size-4 shrink-0" />
-      <div className="min-w-0">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-75">{suggestion.kind}</p>
-        <p className="text-sm">{suggestion.title}</p>
-        {suggestion.rationale ? (
-          <p className="mt-0.5 line-clamp-2 text-xs opacity-75">{suggestion.rationale}</p>
-        ) : null}
-      </div>
-    </div>
-  );
+function findGroupKeyForRow(groups: { key: string; items: TimelineItem[] }[], rowKey: string) {
+  for (const group of groups) {
+    for (const item of group.items) {
+      if (`${item.kind}-${item.id}` === rowKey) return group.key;
+    }
+  }
+  return null;
 }
 
-function MetricPill({ label, value }: { label: string; value: number }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-background px-2 py-1 text-xs text-muted-foreground">
-      <span className="font-medium text-foreground">{value}</span>
-      {label}
-    </span>
+function groupByDay(items: TimelineItem[]) {
+  const buckets = new Map<string, { key: string; label: string; items: TimelineItem[] }>();
+  const now = new Date();
+
+  for (const item of items) {
+    const date = new Date(item.timestamp);
+    if (Number.isNaN(date.getTime())) continue;
+
+    const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    const label = dayLabel(date, now);
+    const bucket = buckets.get(key) ?? { key, label, items: [] };
+    bucket.items.push(item);
+    buckets.set(key, bucket);
+  }
+
+  return [...buckets.values()];
+}
+
+function dayLabel(date: Date, now: Date) {
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diff = Math.floor(
+    (startOfDay(now).getTime() - startOfDay(date).getTime()) / 86400000,
   );
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Yesterday";
+
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  if (date.getFullYear() === now.getFullYear()) {
+    return `${months[date.getMonth()]} ${date.getDate()}`;
+  }
+  return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+}
+
+function subjectHrefFor(run: LibrarianRun, projectId: string): string | null {
+  if (run.trigger_type === "conversation_ended" && run.trigger_ref) {
+    return `/project/${projectId}/chat?c=${run.trigger_ref}`;
+  }
+  if (run.trigger_type === "source_ingested") {
+    return `/project/${projectId}/sources`;
+  }
+  if (run.trigger_type === "wiki_lint") {
+    return `/project/${projectId}/files`;
+  }
+  return null;
+}
+
+function eventHrefFor(event: ActivityEvent, projectId: string): string | null {
+  if (event.event_type === "source_ingested") {
+    return `/project/${projectId}/sources`;
+  }
+  if (event.event_type === "agent_file_edit" || event.event_type === "file_edited") {
+    return `/project/${projectId}/files`;
+  }
+  return null;
 }
 
 function groupLibrarianEvents(events: ActivityEvent[]) {
@@ -392,38 +673,13 @@ function isGroupedLibrarianEvent(event: ActivityEvent) {
   return event.event_type.startsWith("librarian_");
 }
 
-function parseRunSummary(summary: string | null): ParsedRunSummary {
-  if (!summary) return { subject: null, counts: null, body: null };
-
-  const match = summary.match(/^Librarian\s+([\s\S]+):\s+([^.]+)\.\s*([\s\S]*)$/);
-  if (!match) return { subject: null, counts: null, body: summary };
-
-  return {
-    subject: match[1] || null,
-    counts: match[2] || null,
-    body: match[3] || null,
-  };
-}
-
-function subjectLabel(subject: string | null) {
-  if (!subject) return null;
-
-  const chat = subject.match(/^chat\(([\s\S]*)\)$/);
-  if (chat?.[1]) return `Chat: ${chat[1]}`;
-
-  const ingest = subject.match(/^ingest\(([\s\S]*)\)$/);
-  if (ingest?.[1]) return `Source: ${ingest[1]}`;
-
-  return subject === "lint" ? "User-requested lint" : subject;
-}
-
 function durationLabel(run: LibrarianRun) {
-  if (!run.finished_at) return "In progress";
+  if (!run.finished_at) return "in progress";
 
   const started = new Date(run.started_at).getTime();
   const finished = new Date(run.finished_at).getTime();
   if (!Number.isFinite(started) || !Number.isFinite(finished) || finished < started) {
-    return "Duration unavailable";
+    return "";
   }
 
   const seconds = Math.max(1, Math.round((finished - started) / 1000));
@@ -509,7 +765,7 @@ function suggestionKind(value: unknown): LibrarianSuggestion["kind"] {
   return "fix";
 }
 
-function actionLabel(action: LibrarianAction["action"]) {
+function actionVerb(action: LibrarianAction["action"]) {
   switch (action) {
     case "create":
       return "created";
@@ -520,53 +776,4 @@ function actionLabel(action: LibrarianAction["action"]) {
     case "delete":
       return "deleted";
   }
-}
-
-function eventTheme(eventType: string): {
-  dot: string;
-  rail: string;
-  icon: string;
-  Icon: LucideIcon;
-} {
-  if (eventType === "source_ingested") {
-    return {
-      dot: "bg-primary",
-      rail: "border-l-primary",
-      icon: "bg-accent-soft text-accent-ink",
-      Icon: Upload,
-    };
-  }
-
-  if (eventType === "agent_file_edit" || eventType === "file_edited") {
-    return {
-      dot: "bg-success",
-      rail: "border-l-success",
-      icon: "bg-success-soft text-success",
-      Icon: FileText,
-    };
-  }
-
-  return {
-    dot: "bg-muted-foreground",
-    rail: "border-l-border",
-    icon: "bg-muted text-muted-foreground",
-    Icon: Activity,
-  };
-}
-
-function eventLabel(eventType: string) {
-  switch (eventType) {
-    case "source_ingested":
-      return "Source ingested";
-    case "agent_file_edit":
-      return "Advisor file edit";
-    case "file_edited":
-      return "Manual file edit";
-    default:
-      return "Project event";
-  }
-}
-
-function formatEventType(eventType: string) {
-  return eventType.replaceAll("_", " ");
 }

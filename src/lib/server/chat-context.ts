@@ -90,6 +90,17 @@ export async function assembleProjectSystemPrompt(projectId: string, userId: str
     ].join("\n"),
   );
 
+  parts.push(
+    [
+      "# Grounded Citations",
+      "When you use source material from search_sources to answer, cite every factual sentence or bullet row that depends on that material.",
+      "Place the marker immediately after the sentence or row using this exact format: 〖cite:<chunk_id>〗.",
+      "Use only chunk_id values returned by search_sources in the current answer. Do not cite read_source ids, source titles, project files, or invented ids.",
+      "If a sentence is a transition, recommendation, or unsupported synthesis, leave it uncited rather than attaching a misleading marker.",
+      "Keep markers out of headings.",
+    ].join("\n"),
+  );
+
   return parts.join("\n\n");
 }
 

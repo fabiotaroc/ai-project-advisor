@@ -7,6 +7,13 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 const CHUNK_SIZE = 1200;
 const CHUNK_OVERLAP = 200;
+const CHUNK_STEP = CHUNK_SIZE - CHUNK_OVERLAP;
+
+export type TextChunk = {
+  content: string;
+  charStart: number;
+  charEnd: number;
+};
 
 export async function extractText(
   buffer: Buffer,
@@ -46,16 +53,23 @@ export async function extractText(
 }
 
 export function chunkText(text: string): string[] {
-  const chunks: string[] = [];
+  return chunkTextWithOffsets(text).map((chunk) => chunk.content);
+}
+
+export function chunkTextWithOffsets(text: string): TextChunk[] {
+  const chunks: TextChunk[] = [];
   let start = 0;
 
   while (start < text.length) {
     const end = Math.min(start + CHUNK_SIZE, text.length);
-    chunks.push(text.slice(start, end));
-    start += CHUNK_SIZE - CHUNK_OVERLAP;
+    const content = text.slice(start, end);
+    if (content.trim().length > 0) {
+      chunks.push({ content, charStart: start, charEnd: end });
+    }
+    start += CHUNK_STEP;
   }
 
-  return chunks.filter((c) => c.trim().length > 0);
+  return chunks;
 }
 
 export async function generateEmbeddings(chunks: string[]): Promise<number[][]> {
@@ -124,16 +138,18 @@ export async function ingestSourceMaterial({
 
     const [summary, chunks] = await Promise.all([
       generateSourceSummary(text, title),
-      Promise.resolve(chunkText(text)),
+      Promise.resolve(chunkTextWithOffsets(text)),
     ]);
 
-    const embeddings = await generateEmbeddings(chunks);
+    const embeddings = await generateEmbeddings(chunks.map((chunk) => chunk.content));
 
-    const chunkRows = chunks.map((content, index) => ({
+    const chunkRows = chunks.map((chunk, index) => ({
       source_material_id: sourceId,
-      content,
+      content: chunk.content,
       embedding: JSON.stringify(embeddings[index]),
       chunk_index: index,
+      char_start: chunk.charStart,
+      char_end: chunk.charEnd,
       metadata: {},
     }));
 

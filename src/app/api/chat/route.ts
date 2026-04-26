@@ -11,6 +11,7 @@ import {
 } from "@/lib/server/chat-history";
 import { assembleProjectSystemPrompt } from "@/lib/server/chat-context";
 import { editProjectFile } from "@/lib/server/project-files";
+import { buildSourceDisplayExcerpt } from "@/lib/server/source-snippets";
 import {
   triggerOnConversationEnded,
   triggerWikiLint,
@@ -143,7 +144,8 @@ export async function POST(request: Request) {
         },
       }),
       search_sources: tool({
-        description: "Semantic search across ingested source material chunks. Use returned source ids with read_source.",
+        description:
+          "Semantic search across ingested source material chunks. Use returned source ids with read_source and returned chunk_id values for sentence-level citation markers.",
         inputSchema: z.object({ query: z.string().min(2) }),
         execute: async ({ query }) => {
           const { embedding: queryEmbedding } = await embed({
@@ -163,17 +165,35 @@ export async function POST(request: Request) {
           const sourceIds = [...new Set(data.map((d: { source_material_id: string }) => d.source_material_id))];
           const { data: sources } = await userSupabase
             .from("source_materials")
-            .select("id,title")
+            .select("id,title,parsed_content")
             .in("id", sourceIds);
 
-          const titleMap = new Map((sources ?? []).map((s) => [s.id, s.title]));
+          const sourceMap = new Map(
+            (sources ?? []).map((source) => [
+              source.id,
+              { title: source.title, parsedContent: source.parsed_content },
+            ]),
+          );
 
-          return data.map((chunk: { chunk_id: string; source_material_id: string; content: string; similarity: number }) => ({
+          return data.map((chunk: {
+            chunk_id: string;
+            source_material_id: string;
+            content: string;
+            similarity: number;
+            char_start: number | null;
+            char_end: number | null;
+          }) => ({
             chunk_id: chunk.chunk_id,
             source_material_id: chunk.source_material_id,
-            source_title: titleMap.get(chunk.source_material_id) ?? "Unknown",
+            source_title: sourceMap.get(chunk.source_material_id)?.title ?? "Unknown",
             content: chunk.content,
+            excerpt: buildSourceDisplayExcerpt({
+              content: chunk.content,
+              fullText: sourceMap.get(chunk.source_material_id)?.parsedContent,
+            }),
             similarity: chunk.similarity,
+            char_start: chunk.char_start,
+            char_end: chunk.char_end,
           }));
         },
       }),

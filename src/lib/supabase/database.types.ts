@@ -395,6 +395,8 @@ export type Database = {
       }
       source_chunks: {
         Row: {
+          char_end: number | null
+          char_start: number | null
           chunk_index: number
           content: string
           created_at: string
@@ -404,6 +406,8 @@ export type Database = {
           source_material_id: string
         }
         Insert: {
+          char_end?: number | null
+          char_start?: number | null
           chunk_index: number
           content: string
           created_at?: string
@@ -413,6 +417,8 @@ export type Database = {
           source_material_id: string
         }
         Update: {
+          char_end?: number | null
+          char_start?: number | null
           chunk_index?: number
           content?: string
           created_at?: string
@@ -480,6 +486,8 @@ export type Database = {
           p_query_embedding: string
         }
         Returns: {
+          char_end: number | null
+          char_start: number | null
           chunk_id: string
           content: string
           similarity: number

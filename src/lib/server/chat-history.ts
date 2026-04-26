@@ -5,6 +5,11 @@ import type { ProjectConversationListItem } from "@/lib/types";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
+  buildCitationMetadataFromParts,
+  parseMessageCitationMetadata,
+  type ChatMessageMetadata,
+} from "@/lib/chat-citations";
+import {
   generateChatTitleFromUserMessageText,
   getHeuristicChatTitle,
 } from "@/lib/server/chats/chat-title";
@@ -51,6 +56,12 @@ function getSerializedParts(message: UIMessage) {
   return JSON.parse(JSON.stringify(message.parts)) as unknown[];
 }
 
+function getSerializedCitations(message: UIMessage) {
+  if (message.role !== "assistant") return null;
+  const citations = buildCitationMetadataFromParts(message.parts);
+  return citations ? JSON.parse(JSON.stringify(citations)) : null;
+}
+
 function toUIMessage(record: MessageRecord): UIMessage {
   const parts: UIMessage["parts"] = [];
   const storedParts = Array.isArray(record.tool_calls)
@@ -72,9 +83,13 @@ function toUIMessage(record: MessageRecord): UIMessage {
     parts.push({ type: "text", text: "" });
   }
 
+  const citations = parseMessageCitationMetadata(record.citations);
+  const metadata: ChatMessageMetadata | undefined = citations ? { citations } : undefined;
+
   return {
     id: record.id,
     role: record.role as UIMessage["role"],
+    ...(metadata ? { metadata } : {}),
     parts,
   };
 }
@@ -338,7 +353,7 @@ export async function replaceConversationMessages(conversationId: string, messag
       role: message.role === "user" || message.role === "assistant" || message.role === "system" ? message.role : "assistant",
       content: getMessageText(message),
       tool_calls: getSerializedParts(message),
-      citations: null,
+      citations: getSerializedCitations(message),
       created_at: new Date(startedAt + index).toISOString(),
     }));
 

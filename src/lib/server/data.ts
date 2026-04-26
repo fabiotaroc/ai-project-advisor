@@ -16,6 +16,7 @@ import type {
   ProjectSummary,
   SourceLinkedActivity,
   SourceLinkedRun,
+  SourceChunkReference,
   SourceMaterial,
   SourceMaterialDetail,
   SourceUploader,
@@ -241,7 +242,7 @@ async function getSourceDetailsForProject(
   const [chunksResult, profilesResult, activityResult, runsResult] = await Promise.all([
     supabase
       .from("source_chunks")
-      .select("source_material_id")
+      .select("id,source_material_id,content,chunk_index,char_start,char_end")
       .in("source_material_id", sourceIds),
     uploaderIds.length > 0
       ? admin.from("profiles").select("id,name,email").in("id", uploaderIds)
@@ -269,9 +270,21 @@ async function getSourceDetailsForProject(
   if (activityResult.error) throw activityResult.error;
   if (runsResult.error) throw runsResult.error;
 
-  const chunkCounts = new Map<string, number>();
+  const chunksBySource = new Map<string, SourceChunkReference[]>();
   for (const row of chunksResult.data ?? []) {
-    chunkCounts.set(row.source_material_id, (chunkCounts.get(row.source_material_id) ?? 0) + 1);
+    const list = chunksBySource.get(row.source_material_id) ?? [];
+    list.push({
+      id: row.id,
+      content: row.content,
+      chunk_index: row.chunk_index,
+      char_start: row.char_start,
+      char_end: row.char_end,
+    });
+    chunksBySource.set(row.source_material_id, list);
+  }
+
+  for (const chunks of chunksBySource.values()) {
+    chunks.sort((a, b) => a.chunk_index - b.chunk_index);
   }
 
   const uploaders = new Map<string, SourceUploader>();
@@ -310,7 +323,8 @@ async function getSourceDetailsForProject(
 
   return sources.map((source) => ({
     ...source,
-    chunk_count: chunkCounts.get(source.id) ?? 0,
+    chunk_count: chunksBySource.get(source.id)?.length ?? 0,
+    chunks: chunksBySource.get(source.id) ?? [],
     uploader: source.uploaded_by ? uploaders.get(source.uploaded_by) ?? null : null,
     linked_activity: activityBySource.get(source.id) ?? [],
     linked_runs: runsBySource.get(source.id) ?? [],

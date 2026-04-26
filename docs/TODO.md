@@ -5,10 +5,14 @@
 
 ### Agent architecture:
 [ ] rethink librarian vs advisor split. user does not want to see "librarian" term. his only talking parter is the main Agent. The librarian should be a background agent that is not visible to the user. Maybe use the librarian as a subagent of the main agent.
-[ ] add citations in chat message (perplexity-style)
+[ ] search sources is only vector, should be sql filtering as well. eg i ask for sources on a day, it filters by date. dedicated tools.ts file advisor agent.
+[x] add citations in chat message (perplexity-style)
 
 ### Activity page:
 [ ] Fix design, make it more readable and attractive. -> add backlink to the source or artifact page. ("Recent activity")
 [x] Make librarian activity clearer in backend and frontend (activity page)
 [x] Document the librarian system and the advisor agents in a markdown doc to make it clearer. Also use mermaid diagrams and stuff.
 [x] Add token and context count to chat page like codex or claude code
+
+### Chat:
+[x] Scroll-to-bottom overlay (circular control) when the message list is scrolled away from the latest message; re-stick to bottom on send and while streaming unless the user scrolls up

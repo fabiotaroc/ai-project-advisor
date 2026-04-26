@@ -76,8 +76,17 @@ export type SourceLinkedRun = {
   suggestion_count: number;
 };
 
+export type SourceChunkReference = {
+  id: string;
+  content: string;
+  chunk_index: number;
+  char_start: number | null;
+  char_end: number | null;
+};
+
 export type SourceMaterialDetail = SourceMaterial & {
   chunk_count: number;
+  chunks: SourceChunkReference[];
   uploader: SourceUploader | null;
   linked_activity: SourceLinkedActivity[];
   linked_runs: SourceLinkedRun[];
