@@ -1,17 +1,16 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
-const body = Inter({
+const body = Geist({
   variable: "--font-body",
   subsets: ["latin"],
 });
 
-const mono = JetBrains_Mono({
+const mono = Geist_Mono({
   variable: "--font-mono",
-  weight: ["400", "500"],
   subsets: ["latin"],
 });
 

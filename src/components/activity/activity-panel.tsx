@@ -60,26 +60,23 @@ const runStatusStyles: Record<
 > = {
   succeeded: {
     label: "Succeeded",
-    dot: "bg-emerald-500",
-    rail: "border-l-emerald-400",
-    badge:
-      "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300",
+    dot: "bg-success",
+    rail: "border-l-success",
+    badge: "border-success-line bg-success-soft text-success",
     Icon: CheckCircle2,
   },
   running: {
     label: "Running",
-    dot: "bg-sky-500",
-    rail: "border-l-sky-400",
-    badge:
-      "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-300",
+    dot: "bg-primary",
+    rail: "border-l-primary",
+    badge: "border-accent-line bg-accent-soft text-accent-ink",
     Icon: CircleDashed,
   },
   failed: {
     label: "Failed",
-    dot: "bg-rose-500",
-    rail: "border-l-rose-400",
-    badge:
-      "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300",
+    dot: "bg-destructive",
+    rail: "border-l-destructive",
+    badge: "border-destructive-line bg-destructive-soft text-destructive",
     Icon: TriangleAlert,
   },
 };
@@ -93,19 +90,19 @@ const triggerStyles: Record<
   }
 > = {
   conversation_ended: {
-    title: "Chat memory pass",
+    title: "Advisor memory pass",
     Icon: MessageSquare,
-    icon: "bg-violet-100 text-violet-700 ring-violet-200 dark:bg-violet-950/50 dark:text-violet-300 dark:ring-violet-900/70",
+    icon: "bg-accent-soft text-accent-ink ring-accent-line",
   },
   source_ingested: {
     title: "Source integration",
     Icon: Upload,
-    icon: "bg-sky-100 text-sky-700 ring-sky-200 dark:bg-sky-950/50 dark:text-sky-300 dark:ring-sky-900/70",
+    icon: "bg-accent-soft text-accent-ink ring-accent-line",
   },
   wiki_lint: {
-    title: "Wiki lint",
+    title: "Memory cleanup",
     Icon: Sparkles,
-    icon: "bg-amber-100 text-amber-800 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:ring-amber-900/70",
+    icon: "bg-warning-soft text-warning ring-warning-line",
   },
 };
 
@@ -151,7 +148,7 @@ export function ActivityPanel({ activity }: { activity: ProjectActivity }) {
         {latestRun ? (
           <Badge variant="outline" className="h-7 gap-1.5 rounded-md px-2.5">
             <Bot className="size-3.5" />
-            Last Librarian run {formatRelative(latestRun.finished_at ?? latestRun.started_at)}
+            Last Advisor memory pass {formatRelative(latestRun.finished_at ?? latestRun.started_at)}
           </Badge>
         ) : null}
       </div>
@@ -349,7 +346,7 @@ function ActionRow({ action }: { action: LibrarianAction }) {
 
 function SuggestionRow({ suggestion }: { suggestion: LibrarianSuggestion }) {
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+    <div className="flex items-start gap-2 rounded-lg border border-warning-line bg-warning-soft px-3 py-2 text-warning">
       <Lightbulb className="mt-0.5 size-4 shrink-0" />
       <div className="min-w-0">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-75">{suggestion.kind}</p>
@@ -533,18 +530,18 @@ function eventTheme(eventType: string): {
 } {
   if (eventType === "source_ingested") {
     return {
-      dot: "bg-sky-500",
-      rail: "border-l-sky-400",
-      icon: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300",
+      dot: "bg-primary",
+      rail: "border-l-primary",
+      icon: "bg-accent-soft text-accent-ink",
       Icon: Upload,
     };
   }
 
   if (eventType === "agent_file_edit" || eventType === "file_edited") {
     return {
-      dot: "bg-emerald-500",
-      rail: "border-l-emerald-400",
-      icon: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
+      dot: "bg-success",
+      rail: "border-l-success",
+      icon: "bg-success-soft text-success",
       Icon: FileText,
     };
   }
