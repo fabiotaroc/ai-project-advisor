@@ -234,6 +234,17 @@ export async function POST(request: Request) {
     originalMessages: body.messages,
     consumeSseStream: consumeStream,
     sendReasoning: true,
+    messageMetadata: ({ part }) => {
+      if (part.type === "finish") {
+        return {
+          usage: {
+            inputTokens: part.totalUsage?.inputTokens,
+            outputTokens: part.totalUsage?.outputTokens,
+            totalTokens: part.totalUsage?.totalTokens,
+          },
+        };
+      }
+    },
     onFinish: async ({ messages, isAborted }) => {
       if (isAborted) {
         return;

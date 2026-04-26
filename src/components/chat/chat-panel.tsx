@@ -37,6 +37,22 @@ import {
 } from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
 
+const CONTEXT_WINDOW_TOKENS = 1_000_000;
+
+type ChatMessageMetadata = {
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+  };
+};
+
+function formatTokens(value: number) {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
+  return `${value}`;
+}
+
 const SUGGESTED_PROMPTS = [
   "Summarize the current project direction and any open risks.",
   "Review the uploaded sources and tell me what we still do not know.",
@@ -440,6 +456,21 @@ export function ChatPanel({
 
   const isBusy = status === "submitted" || status === "streaming";
 
+  const lastUsage = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message.role !== "assistant") continue;
+      const usage = (message.metadata as ChatMessageMetadata | undefined)?.usage;
+      if (usage?.totalTokens || usage?.inputTokens) return usage;
+    }
+    return undefined;
+  }, [messages]);
+
+  const contextTokens = lastUsage?.inputTokens ?? 0;
+  const contextPercent = contextTokens
+    ? Math.min(100, (contextTokens / CONTEXT_WINDOW_TOKENS) * 100)
+    : 0;
+
   const scrollToBottom = useCallback((behavior: ScrollBehavior) => {
     const viewport = scrollRef.current;
     if (!viewport) return;
@@ -562,6 +593,17 @@ export function ChatPanel({
                   </kbd>{" "}
                   for newline
                 </span>
+                {lastUsage ? (
+                  <span
+                    className="ml-2 font-mono text-[11px] text-muted-foreground/70"
+                    title={`Input ${lastUsage.inputTokens ?? 0} · Output ${lastUsage.outputTokens ?? 0} · Total ${lastUsage.totalTokens ?? 0} tokens`}
+                  >
+                    {formatTokens(contextTokens)} / {formatTokens(CONTEXT_WINDOW_TOKENS)} ctx ({contextPercent.toFixed(0)}%)
+                    {lastUsage.outputTokens
+                      ? ` · ${formatTokens(lastUsage.outputTokens)} out`
+                      : ""}
+                  </span>
+                ) : null}
                 <InputGroupButton
                   type="submit"
                   variant="default"
