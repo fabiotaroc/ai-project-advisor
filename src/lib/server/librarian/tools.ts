@@ -58,6 +58,11 @@ async function logFileActivity(
     actor_id: ctx.userId,
     target_type: "project_file",
     target_id: fileId,
+    metadata: {
+      run_id: ctx.runId,
+      action,
+      path,
+    },
   });
 }
 
@@ -373,6 +378,12 @@ export function buildLibrarianTools(
           actor_id: ctx.userId,
           target_type: "librarian_run",
           target_id: ctx.runId,
+          metadata: {
+            run_id: ctx.runId,
+            kind,
+            title,
+            rationale: rationale ?? null,
+          },
         });
         return { recorded: true };
       },

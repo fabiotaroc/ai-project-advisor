@@ -172,6 +172,10 @@ export async function ingestSourceMaterial({
       actor_id: userId,
       target_type: "source_material",
       target_id: sourceId,
+      metadata: {
+        title,
+        chunk_count: chunks.length,
+      },
     });
   } catch (error) {
     console.error("Ingestion failed for source", sourceId, error);

@@ -20,16 +20,19 @@ const themes = [
   {
     value: "light",
     label: "Light",
+    description: "Bright interface",
     icon: Sun,
   },
   {
     value: "dark",
     label: "Dark",
+    description: "Dim interface",
     icon: Moon,
   },
   {
     value: "system",
     label: "System",
+    description: "Follow device",
     icon: Monitor,
   },
 ] as const;

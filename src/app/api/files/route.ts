@@ -29,6 +29,10 @@ export async function POST(request: NextRequest) {
     actor_id: user.id,
     target_type: "project_file",
     target_id: file.id,
+    metadata: {
+      path: body.path,
+      action: "edit",
+    },
   });
 
   return NextResponse.json({ file });

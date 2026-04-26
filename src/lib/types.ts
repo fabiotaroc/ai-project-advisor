@@ -46,7 +46,47 @@ export type ActivityEvent = {
   project_id: string;
   event_type: string;
   summary: string;
+  actor_id: string | null;
+  target_type: string | null;
+  target_id: string | null;
+  metadata: Record<string, unknown>;
   created_at: string;
+};
+
+export type LibrarianAction = {
+  action: "create" | "edit" | "rename" | "delete";
+  path: string;
+  details?: Record<string, unknown>;
+};
+
+export type LibrarianSuggestion = {
+  kind: "question" | "source" | "fix";
+  title: string;
+  rationale?: string | null;
+};
+
+export type LibrarianRun = {
+  id: string;
+  project_id: string;
+  trigger_type: "source_ingested" | "conversation_ended" | "wiki_lint";
+  trigger_ref: string | null;
+  mode: "write" | "proposal";
+  status: "running" | "succeeded" | "failed";
+  summary: string | null;
+  error: string | null;
+  actor_id: string | null;
+  started_at: string;
+  finished_at: string | null;
+  action_count: number;
+  suggestion_count: number;
+  actions: LibrarianAction[];
+  suggestions: LibrarianSuggestion[];
+  files_touched: string[];
+};
+
+export type ProjectActivity = {
+  events: ActivityEvent[];
+  librarianRuns: LibrarianRun[];
 };
 
 export type ProjectRole = "owner" | "editor" | "viewer";

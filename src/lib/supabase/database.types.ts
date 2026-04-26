@@ -18,6 +18,7 @@ export type Database = {
           created_at: string
           event_type: string
           id: string
+          metadata: Json
           project_id: string
           summary: string
           target_id: string | null
@@ -28,6 +29,7 @@ export type Database = {
           created_at?: string
           event_type: string
           id?: string
+          metadata?: Json
           project_id: string
           summary: string
           target_id?: string | null
@@ -38,6 +40,7 @@ export type Database = {
           created_at?: string
           event_type?: string
           id?: string
+          metadata?: Json
           project_id?: string
           summary?: string
           target_id?: string | null
@@ -203,40 +206,55 @@ export type Database = {
       }
       librarian_runs: {
         Row: {
+          action_count: number
+          actions: Json
           actor_id: string | null
           error: string | null
           finished_at: string | null
+          files_touched: string[]
           id: string
           mode: string
           project_id: string
           started_at: string
           status: string
+          suggestion_count: number
+          suggestions: Json
           summary: string | null
           trigger_ref: string | null
           trigger_type: string
         }
         Insert: {
+          action_count?: number
+          actions?: Json
           actor_id?: string | null
           error?: string | null
           finished_at?: string | null
+          files_touched?: string[]
           id?: string
           mode?: string
           project_id: string
           started_at?: string
           status?: string
+          suggestion_count?: number
+          suggestions?: Json
           summary?: string | null
           trigger_ref?: string | null
           trigger_type: string
         }
         Update: {
+          action_count?: number
+          actions?: Json
           actor_id?: string | null
           error?: string | null
           finished_at?: string | null
+          files_touched?: string[]
           id?: string
           mode?: string
           project_id?: string
           started_at?: string
           status?: string
+          suggestion_count?: number
+          suggestions?: Json
           summary?: string | null
           trigger_ref?: string | null
           trigger_type?: string

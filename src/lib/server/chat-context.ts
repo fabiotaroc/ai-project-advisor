@@ -40,7 +40,7 @@ export async function assembleProjectSystemPrompt(projectId: string, userId: str
   parts.push(
     [
       "You are an AI project advisor for non-technical users. You help manage and synthesize knowledge about their project. Keep responses concrete, helpful, and action-oriented.",
-      "Focus on answering the user well in-conversation. A separate background Librarian agent owns wiki curation: it maintains index.md and log.md, synthesizes ingested sources, keeps memory entries, proposes lints, and decides when chat syntheses deserve their own page. Do not try to replicate its job — when the user asks to 'lint the wiki', 'curate', 'audit', or 'check wiki health', call the `trigger_wiki_lint` tool (optionally with a `focus` string capturing what they specifically want checked), then tell them the lint is running and its results will appear in log.md and the activity feed.",
+      "Focus on answering the user well in-conversation. A separate background Librarian agent owns wiki curation: it maintains index.md and log.md, synthesizes ingested sources, keeps memory entries, proposes lints, and decides when chat syntheses deserve their own page. Do not try to replicate its job — when the user asks to 'lint the wiki', 'curate', 'audit', or 'check wiki health', call the `trigger_wiki_lint` tool with a `focus` string when they name an area **or** state a factual correction (e.g. two pages are the same person). Pass their wording **verbatim** for corrections — do not soften “they are the same” into “check whether they might be duplicates”. Then tell them the lint is running and its results will appear in log.md and the activity feed.",
     ].join(" "),
   );
 
@@ -85,7 +85,7 @@ export async function assembleProjectSystemPrompt(projectId: string, userId: str
       "- edit_file — create or update a project file (locked files will be rejected). The Librarian keeps index.md and log.md in sync; focus your edits on content pages.",
       "- search_sources — semantic search across ingested source material chunks",
       "- read_source — read the full content of an ingested source material",
-      "- trigger_wiki_lint — kick off a background Librarian health-check run (stale content, contradictions, orphans, missing entity pages, index gaps). Accepts an optional focus string. Use this whenever the user asks to lint/curate/audit/check the wiki; do not attempt to perform the lint yourself.",
+      "- trigger_wiki_lint — kick off a background Librarian health-check run (stale content, contradictions, orphans, missing entity pages, index gaps). Optional `focus`: topic/path to check, **or** the user’s exact factual correction (same entity, merge request). For corrections, quote the user literally; do not rephrase into a hypothetical. Use whenever the user asks to lint/curate/audit/check the wiki; do not attempt to perform the lint yourself.",
       "- Only call read_source with a sourceMaterialId returned by search_sources. If search_sources returns no results, do not call read_source.",
     ].join("\n"),
   );

@@ -125,6 +125,10 @@ export async function POST(request: Request) {
             actor_id: user.id,
             target_type: "project_file",
             target_id: file.id,
+            metadata: {
+              path,
+              action: isNewFile ? "create" : "edit",
+            },
           });
 
           return { path: file.path, updated_at: file.updated_at, created: isNewFile };
@@ -190,7 +194,7 @@ export async function POST(request: Request) {
       }),
       trigger_wiki_lint: tool({
         description:
-          "Kick off a background Librarian run that performs a wiki health check (stale content, contradictions, orphan pages, missing entity pages, index gaps). Use this whenever the user asks to lint, curate, audit, or health-check the wiki. The lint runs asynchronously in the background; tell the user it's running and they'll see the results shortly in the Files view and activity feed. Do not try to perform the lint yourself.",
+          "Kick off a background Librarian run that performs a wiki health check (stale content, contradictions, orphan pages, missing entity pages, index gaps). Use whenever the user asks to lint, curate, audit, or health-check the wiki. If they state a factual correction (e.g. two stakeholder files are the same person, merge duplicates), put their exact words in `focus` so the Librarian treats it as authoritative — do not weaken it into 'check if they might be duplicates'. The lint runs asynchronously; tell the user it's running and they'll see results in the Files view and activity feed. Do not perform the lint yourself.",
         inputSchema: z.object({
           focus: z
             .string()
@@ -198,7 +202,7 @@ export async function POST(request: Request) {
             .max(500)
             .optional()
             .describe(
-              "Optional: a specific area or concern the user wants checked (e.g. 'decisions.md', 'stakeholder pages', 'outdated dates').",
+              "Optional. Either a scope to check (e.g. 'decisions.md', 'stakeholder pages') or the user's verbatim factual correction (e.g. 'stakeholders/a.md and stakeholders/b.md are the same person — merge').",
             ),
         }),
         execute: async ({ focus }) => {

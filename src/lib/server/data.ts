@@ -6,6 +6,10 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   AccessibleProject,
   ActivityEvent,
+  LibrarianAction,
+  LibrarianRun,
+  LibrarianSuggestion,
+  ProjectActivity,
   ProjectFile,
   ProjectRole,
   ProjectSettings,
@@ -212,19 +216,162 @@ export async function getProjectSettings(projectId: string): Promise<ProjectSett
   return data as ProjectSettings | null;
 }
 
-export async function getActivity(projectId: string) {
+export async function getActivity(projectId: string): Promise<ProjectActivity> {
   await getProjectForUser(projectId);
 
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("activity_events")
-    .select("*")
-    .eq("project_id", projectId)
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const [eventsResult, runsResult] = await Promise.all([
+    supabase
+      .from("activity_events")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false })
+      .limit(150),
+    supabase
+      .from("librarian_runs")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("started_at", { ascending: false })
+      .limit(75),
+  ]);
 
-  if (error) throw error;
-  return (data ?? []) as ActivityEvent[];
+  if (eventsResult.error) throw eventsResult.error;
+  if (runsResult.error) throw runsResult.error;
+
+  return {
+    events: (eventsResult.data ?? []).map(normalizeActivityEvent),
+    librarianRuns: (runsResult.data ?? []).map(normalizeLibrarianRun),
+  };
+}
+
+function normalizeActivityEvent(row: Record<string, unknown>): ActivityEvent {
+  return {
+    id: String(row.id),
+    project_id: String(row.project_id),
+    event_type: String(row.event_type),
+    summary: String(row.summary),
+    actor_id: asNullableString(row.actor_id),
+    target_type: asNullableString(row.target_type),
+    target_id: asNullableString(row.target_id),
+    metadata: asRecord(row.metadata),
+    created_at: String(row.created_at),
+  };
+}
+
+function normalizeLibrarianRun(row: Record<string, unknown>): LibrarianRun {
+  const actions = normalizeActions(row.actions);
+  const suggestions = normalizeSuggestions(row.suggestions);
+
+  return {
+    id: String(row.id),
+    project_id: String(row.project_id),
+    trigger_type: asTriggerType(row.trigger_type),
+    trigger_ref: asNullableString(row.trigger_ref),
+    mode: asMode(row.mode),
+    status: asRunStatus(row.status),
+    summary: asNullableString(row.summary),
+    error: asNullableString(row.error),
+    actor_id: asNullableString(row.actor_id),
+    started_at: String(row.started_at),
+    finished_at: asNullableString(row.finished_at),
+    action_count: asNonNegativeNumber(row.action_count, actions.length),
+    suggestion_count: asNonNegativeNumber(row.suggestion_count, suggestions.length),
+    actions,
+    suggestions,
+    files_touched: normalizeStringArray(row.files_touched),
+  };
+}
+
+function asNullableString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
+function asNonNegativeNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : fallback;
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function normalizeActions(value: unknown): LibrarianAction[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((item) => {
+    const row = asRecord(item);
+    const action = row.action;
+    const path = row.path;
+
+    if (
+      (action !== "create" && action !== "edit" && action !== "rename" && action !== "delete") ||
+      typeof path !== "string"
+    ) {
+      return [];
+    }
+
+    const normalized: LibrarianAction = { action, path };
+    const details = asRecord(row.details);
+    if (Object.keys(details).length > 0) {
+      normalized.details = details;
+    }
+    return [normalized];
+  });
+}
+
+function normalizeSuggestions(value: unknown): LibrarianSuggestion[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((item) => {
+    const row = asRecord(item);
+    const kind = row.kind;
+    const title = row.title;
+
+    if (
+      (kind !== "question" && kind !== "source" && kind !== "fix") ||
+      typeof title !== "string"
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        kind,
+        title,
+        rationale: typeof row.rationale === "string" ? row.rationale : null,
+      },
+    ];
+  });
+}
+
+function asTriggerType(value: unknown): LibrarianRun["trigger_type"] {
+  if (
+    value === "source_ingested" ||
+    value === "conversation_ended" ||
+    value === "wiki_lint"
+  ) {
+    return value;
+  }
+  return "wiki_lint";
+}
+
+function asMode(value: unknown): LibrarianRun["mode"] {
+  return value === "proposal" ? "proposal" : "write";
+}
+
+function asRunStatus(value: unknown): LibrarianRun["status"] {
+  if (value === "running" || value === "failed" || value === "succeeded") {
+    return value;
+  }
+  return "running";
 }
 
 export const getAccessibleProjectsSummary = cache(async (): Promise<ProjectSummary[]> => {

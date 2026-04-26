@@ -158,6 +158,7 @@ export async function runLibrarian({
 
     const finalText = result.text?.trim() ?? "";
     const summary = summariseRun(trigger, record, finalText);
+    const activityPayload = buildRunActivityPayload(record);
 
     if (mode === "write") {
       await appendLogEntry({
@@ -174,6 +175,11 @@ export async function runLibrarian({
       .update({
         status: "succeeded",
         summary,
+        action_count: activityPayload.actionCount,
+        suggestion_count: activityPayload.suggestionCount,
+        actions: activityPayload.actions,
+        suggestions: activityPayload.suggestions,
+        files_touched: activityPayload.filesTouched,
         finished_at: new Date().toISOString(),
       })
       .eq("id", runId);
@@ -185,6 +191,15 @@ export async function runLibrarian({
       actor_id: userId,
       target_type: "librarian_run",
       target_id: runId,
+      metadata: {
+        run_id: runId,
+        trigger_type: trigger.type,
+        mode,
+        status: "succeeded",
+        action_count: activityPayload.actionCount,
+        suggestion_count: activityPayload.suggestionCount,
+        files_touched: activityPayload.filesTouched,
+      },
     });
 
     return {
@@ -197,22 +212,48 @@ export async function runLibrarian({
     };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
+    const activityPayload = buildRunActivityPayload(record);
+    const failureSummary = `Librarian ${runTriggerLabel(trigger)} failed: ${errorMessage.slice(0, 240)}`;
     console.error("Librarian run failed", { runId, error: errorMessage });
 
     await admin
       .from("librarian_runs")
       .update({
         status: "failed",
+        summary: failureSummary,
         error: errorMessage,
+        action_count: activityPayload.actionCount,
+        suggestion_count: activityPayload.suggestionCount,
+        actions: activityPayload.actions,
+        suggestions: activityPayload.suggestions,
+        files_touched: activityPayload.filesTouched,
         finished_at: new Date().toISOString(),
       })
       .eq("id", runId);
+
+    await admin.from("activity_events").insert({
+      project_id: projectId,
+      event_type: "librarian_run_failed",
+      summary: failureSummary,
+      actor_id: userId,
+      target_type: "librarian_run",
+      target_id: runId,
+      metadata: {
+        run_id: runId,
+        trigger_type: trigger.type,
+        mode,
+        status: "failed",
+        action_count: activityPayload.actionCount,
+        suggestion_count: activityPayload.suggestionCount,
+        files_touched: activityPayload.filesTouched,
+      },
+    });
 
     return {
       runId,
       mode,
       status: "failed",
-      summary: null,
+      summary: failureSummary,
       actions: record.actions,
       suggestions: record.suggestions,
       error: errorMessage,
@@ -369,7 +410,15 @@ function describeTrigger(trigger: LibrarianTrigger): string {
     case "wiki_lint":
       return [
         "Type: wiki_lint",
-        trigger.userFocus ? `User focus: ${trigger.userFocus}` : null,
+        trigger.userFocus
+          ? [
+              "",
+              "User focus:",
+              trigger.userFocus,
+              "",
+              "The focus may be exploratory (e.g. a folder or topic to check) or it may state **project facts** (e.g. two stakeholder pages are the same person, a spelling, a preferred canonical name, or “merge these”). When it asserts facts about the project, treat that as **trusted owner input for this run** and reconcile the wiki: pick a canonical path, merge substantive content, turn the other path into a short alias stub linking to canonical, update index.md and inbound links. Do **not** refuse to merge or canonicalize solely because ingested sources or existing pages never spelled out that fact — the user just did.",
+            ].join("\n")
+          : null,
         "",
         "Your job: perform a wiki health check. Look for:",
         "- Stale content (outdated dates, deadlines, statuses)",
@@ -378,9 +427,12 @@ function describeTrigger(trigger: LibrarianTrigger): string {
         "- Missing entity pages (entities mentioned often but lacking their own page)",
         "- Index gaps (files missing from index.md, or index entries for files that no longer exist)",
         "",
-        "Apply direct fixes where safe (updating index.md, fixing obvious stale references, filing orphans under a topic page). For anything requiring judgement — new questions to investigate, new sources to find, non-trivial rewrites — call record_suggestion instead. Record at least one suggestion per lint run unless the wiki is genuinely pristine.",
+        "Apply direct fixes where safe (updating index.md, fixing obvious stale references, filing orphans under a topic page).",
+        "For exploratory passes (no factual correction in focus), use record_suggestion for open questions that need new sources or owner judgment instead of guessing.",
+        "If you fully reconciled the wiki per an explicit correction in the user focus, you do not need record_suggestion just to meet a quota.",
+        "Otherwise record at least one suggestion per lint run unless the wiki is genuinely pristine after your fixes.",
       ]
-        .filter(Boolean)
+        .filter((part): part is string => part != null)
         .join("\n");
     default: {
       const _exhaustive: never = trigger;
@@ -397,7 +449,7 @@ function buildLibrarianUserPrompt(trigger: LibrarianTrigger): string {
       return `The conversation "${trigger.conversationTitle}" just finished. Decide what (if anything) to file back into the wiki, and always append today's session notes to memory/${today()}.md.`;
     case "wiki_lint":
       return trigger.userFocus
-        ? `Run a focused wiki lint pass. Focus: ${trigger.userFocus}.`
+        ? `Run a focused wiki lint pass. If the focus states factual corrections (same person, duplicates to merge, canonical naming), apply those first, then continue with the health check. Focus: ${trigger.userFocus}.`
         : `Run a full wiki lint pass now.`;
   }
 }
@@ -427,18 +479,41 @@ function summariseRun(
     pieces.push(`${record.suggestions.length} suggestion${record.suggestions.length === 1 ? "" : "s"}`);
   }
 
-  const triggerLabel =
-    trigger.type === "source_ingested"
-      ? `ingest(${trigger.sourceTitle})`
-      : trigger.type === "conversation_ended"
-        ? `chat(${trigger.conversationTitle})`
-        : "lint";
-
   const statsSummary = pieces.length ? pieces.join(", ") : "no changes";
   const textSummary = finalText ? finalText.slice(0, 400) : "";
   return textSummary
-    ? `Librarian ${triggerLabel}: ${statsSummary}. ${textSummary}`
-    : `Librarian ${triggerLabel}: ${statsSummary}.`;
+    ? `Librarian ${runTriggerLabel(trigger)}: ${statsSummary}. ${textSummary}`
+    : `Librarian ${runTriggerLabel(trigger)}: ${statsSummary}.`;
+}
+
+function runTriggerLabel(trigger: LibrarianTrigger): string {
+  if (trigger.type === "source_ingested") return `ingest(${trigger.sourceTitle})`;
+  if (trigger.type === "conversation_ended") return `chat(${trigger.conversationTitle})`;
+  return "lint";
+}
+
+function buildRunActivityPayload(record: LibrarianRunRecord) {
+  const filesTouched = new Set<string>();
+
+  for (const action of record.actions) {
+    filesTouched.add(action.path);
+
+    if (
+      action.action === "rename" &&
+      action.details &&
+      typeof action.details.from === "string"
+    ) {
+      filesTouched.add(action.details.from);
+    }
+  }
+
+  return {
+    actionCount: record.actions.length,
+    suggestionCount: record.suggestions.length,
+    actions: record.actions,
+    suggestions: record.suggestions,
+    filesTouched: [...filesTouched].sort((left, right) => left.localeCompare(right)),
+  };
 }
 
 async function appendLogEntry({

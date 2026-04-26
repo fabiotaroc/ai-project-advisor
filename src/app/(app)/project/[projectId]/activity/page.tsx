@@ -3,6 +3,6 @@ import { getActivity } from "@/lib/server/data";
 
 export default async function ActivityPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
-  const events = await getActivity(projectId);
-  return <ActivityPanel events={events} />;
+  const activity = await getActivity(projectId);
+  return <ActivityPanel activity={activity} />;
 }
