@@ -106,7 +106,7 @@ export function GlossaryPanel({
         <div>
           <h1 className="text-lg font-semibold">Glossary</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Project-specific terminology the advisor uses in every response.
+            Project-specific terminology Morgan uses in every response.
           </p>
         </div>
         <Button onClick={save} disabled={isPending}>

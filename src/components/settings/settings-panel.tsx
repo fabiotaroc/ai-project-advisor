@@ -163,7 +163,7 @@ export function SettingsPanel({
         <div>
           <h1 className="text-lg font-semibold">Project Settings</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Configure how the AI advisor operates on this project.
+            Configure how Morgan operates on this project.
           </p>
         </div>
         <Button onClick={save} disabled={isPending}>
@@ -196,7 +196,7 @@ export function SettingsPanel({
             <CardContent className="space-y-6">
               <SelectField
                 label="Tone"
-                description="How the advisor communicates — formal for client-facing, conversational for internal."
+                description="How Morgan communicates — formal for client-facing, conversational for internal."
                 value={settings.tone}
                 options={[
                   { value: "formal", label: "Formal" },
@@ -208,7 +208,7 @@ export function SettingsPanel({
               <Separator />
               <SelectField
                 label="Verbosity"
-                description="How much detail the advisor includes in responses."
+                description="How much detail Morgan includes in responses."
                 value={settings.verbosity}
                 options={[
                   { value: "concise", label: "Concise" },
@@ -220,7 +220,7 @@ export function SettingsPanel({
               <Separator />
               <SelectField
                 label="Default Format"
-                description="Preferred output structure for the advisor's responses."
+                description="Preferred output structure for Morgan's responses."
                 value={settings.default_format}
                 options={[
                   { value: "prose", label: "Prose" },
@@ -235,7 +235,7 @@ export function SettingsPanel({
               <Separator />
               <SelectField
                 label="Proactivity"
-                description="Whether the advisor suggests changes on its own or waits to be asked."
+                description="Whether Morgan suggests changes on their own or waits to be asked."
                 value={settings.proactivity}
                 options={[
                   { value: "reactive", label: "Reactive — only when asked" },
@@ -251,7 +251,7 @@ export function SettingsPanel({
                 <div className="min-w-0 flex-1">
                   <Label className="text-sm font-medium">Language</Label>
                   <p className="mt-0.5 text-sm text-muted-foreground">
-                    Language for the advisor’s responses.
+                    Language for Morgan’s responses.
                   </p>
                 </div>
                 <Input
@@ -269,7 +269,7 @@ export function SettingsPanel({
             <CardHeader>
               <CardTitle className="text-base">Project Context</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Identity and relationships the advisor cannot infer from sources alone.
+                Identity and relationships Morgan cannot infer from sources alone.
               </p>
             </CardHeader>
             <CardContent className="space-y-5">
@@ -307,7 +307,7 @@ export function SettingsPanel({
                 <Textarea
                   id="additional_context"
                   rows={4}
-                  placeholder="Anything else the advisor should know — sensitive topics, org hierarchy, source trust levels…"
+                  placeholder="Anything else Morgan should know — sensitive topics, org hierarchy, source trust levels…"
                   value={settings.additional_context ?? ""}
                   onChange={(e) => update("additional_context", e.target.value)}
                 />
@@ -321,7 +321,7 @@ export function SettingsPanel({
             <CardHeader>
               <CardTitle className="text-base">Agent Permissions</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Control what the advisor does automatically versus with your approval.
+                Control what Morgan does automatically versus with your approval.
               </p>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -356,7 +356,7 @@ export function SettingsPanel({
             <CardHeader>
               <CardTitle className="text-base">Output Templates</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Define recurring deliverable formats the advisor should follow.
+                Define recurring deliverable formats Morgan should follow.
               </p>
             </CardHeader>
             <CardContent>

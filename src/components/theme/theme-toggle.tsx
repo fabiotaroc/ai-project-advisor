@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/providers/theme-provider";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -78,7 +78,7 @@ export function ThemeToggle({
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup
           value={activeTheme}
-          onValueChange={(value) => setTheme(value)}
+          onValueChange={(value) => setTheme(value as "light" | "dark" | "system")}
         >
           {themes.map(({ value, label, description, icon: Icon }) => (
             <DropdownMenuRadioItem key={value} value={value} className="items-start py-2">

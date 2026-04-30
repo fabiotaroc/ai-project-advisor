@@ -357,7 +357,7 @@ function getTraceSummary(traceParts: TracePart[], citations: CitationRailItem[])
     searches > 0 && sourceReads === 0 ? `${searches} ${searches === 1 ? "search" : "searches"}` : "",
     fileLists > 0 ? `${fileLists} file ${fileLists === 1 ? "list" : "lists"}` : "",
     memoryUpdates > 0 ? `${memoryUpdates} memory ${memoryUpdates === 1 ? "update" : "updates"}` : "",
-    lintRuns > 0 ? `${lintRuns} advisor ${lintRuns === 1 ? "pass" : "passes"}` : "",
+    lintRuns > 0 ? `${lintRuns} Morgan ${lintRuns === 1 ? "pass" : "passes"}` : "",
   ].filter(Boolean);
 
   return formatListSummary(summaryParts);
@@ -459,7 +459,7 @@ function getStreamingStatus(messages: UIMessage[], status: string) {
   }
 
   if (runningTools.some((part) => getToolName(part) === "trigger_wiki_lint")) {
-    return "Starting advisor memory pass...";
+    return "Starting Morgan memory pass...";
   }
 
   if (status === "streaming") return "Writing answer...";
@@ -497,7 +497,7 @@ function buildRailData(messages: UIMessage[], lastUsage: ChatMessageMetadata["us
   const assistantMessages = messages.filter((message) => message.role === "assistant").length;
   const userMessages = messages.filter((message) => message.role === "user").length;
   const facts: ConversationFact[] = [
-    { label: "Turns", value: `${userMessages} user · ${assistantMessages} advisor` },
+    { label: "Turns", value: `${userMessages} user · ${assistantMessages} Morgan` },
     { label: "Tool traces", value: `${toolParts.length}` },
     { label: "Sources referenced", value: `${citationMap.size}` },
     { label: "Memory updates", value: `${memoryMap.size}` },
@@ -988,7 +988,7 @@ export function ChatPanel({
   return (
     <section
       className={cn(
-        "-m-4 grid h-[calc(100vh-3rem)] grid-cols-1 gap-0 bg-background",
+        "-m-4 grid h-svh grid-cols-1 gap-0 bg-background",
         railCollapsed
           ? "xl:grid-cols-[minmax(0,1fr)_auto]"
           : "xl:grid-cols-[minmax(0,1fr)_19rem]"
@@ -1119,7 +1119,7 @@ export function ChatPanel({
                   size="icon-sm"
                   disabled={isBusy || !input.trim()}
                   className="ml-auto rounded-lg"
-                  aria-label={isBusy ? "Advisor is working" : "Send message"}
+                  aria-label={isBusy ? "Morgan is working" : "Send message"}
                 >
                   <SendHorizontal className="size-4" />
                 </InputGroupButton>

@@ -6,12 +6,13 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   Activity,
   BookOpen,
-  ChevronsLeft,
-  ChevronsRight,
-  FolderOpen,
+  ChevronsUpDown,
+  House,
   Library,
   Loader2,
+  LogOut,
   MessageSquare,
+  PanelLeft,
   Plus,
   Search,
   Settings,
@@ -36,12 +37,30 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupAction,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarRail,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { formatChatListTime } from "@/lib/date-format";
 import type { ProjectConversationListItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -66,25 +85,34 @@ function getConversationInitial(title: string) {
   return trimmed[0].toUpperCase();
 }
 
+function getAccountInitial(email: string | null) {
+  const trimmed = email?.trim();
+  if (!trimmed) return "?";
+  return trimmed[0].toUpperCase();
+}
+
 export function ProjectSidebar({
   projectId,
   projectName,
+  userEmail,
   conversations = [],
 }: {
   projectId: string;
   projectName: string;
+  userEmail: string | null;
   conversations?: ConversationSummary[];
 }) {
   const router = useRouter();
   const segment = useSelectedLayoutSegment() ?? "chat";
   const searchParams = useSearchParams();
   const activeConversationId = searchParams.get("c");
+  const { state, toggleSidebar } = useSidebar();
+  const collapsed = state === "collapsed";
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [conversationItems, setConversationItems] = useState(conversations);
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const navigationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -241,395 +269,347 @@ export function ProjectSidebar({
     }
   }
 
-  function renderNavLink(
-    { key, label, icon: Icon }: { key: string; label: string; icon: React.ComponentType<{ className?: string }> },
-  ) {
-    const href = `/project/${projectId}/${key}`;
-    const active = segment === key;
-
-    const linkContent = (
-      <Link
-        href={href}
-        className={cn(
-          "flex items-center rounded-md transition-colors",
-          collapsed ? "justify-center p-2" : "gap-2.5 px-2.5 py-1.5",
-          active
-            ? "bg-primary text-primary-foreground"
-            : "text-muted-foreground hover:bg-accent hover:text-foreground",
-        )}
-      >
-        <Icon className="size-4 shrink-0" />
-        {!collapsed && <span className="text-sm">{label}</span>}
-      </Link>
-    );
-
-    if (collapsed) {
-      return (
-        <Tooltip key={key}>
-          <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
-          <TooltipContent side="right">{label}</TooltipContent>
-        </Tooltip>
-      );
-    }
-
-    return <div key={key}>{linkContent}</div>;
-  }
-
   return (
-    <TooltipProvider delayDuration={0}>
-      <aside
+    <>
+      <Sidebar
+        collapsible="icon"
         className={cn(
-          "sticky top-12 flex h-[calc(100vh-3rem)] shrink-0 flex-col self-start bg-sidebar transition-[width] duration-200",
-          segment !== "chat" && "border-r border-border",
-          collapsed ? "w-14" : "w-72",
+          segment !== "chat" && "group-data-[side=left]/sidebar-wrapper:border-r",
         )}
       >
-        <div className="flex min-h-0 flex-1 flex-col gap-4 p-2">
-          {/* Project header + collapse; shared min-height keeps Search/nav aligned when toggling */}
+        <SidebarHeader className="gap-3">
           <div
             className={cn(
-              "flex shrink-0 py-1",
+              "flex gap-1",
               collapsed
-                ? "min-h-[4.75rem] flex-col items-center justify-center gap-1"
-                : "min-h-[4.75rem] flex-row items-center justify-between gap-2 px-2",
+                ? "w-full flex-col items-start"
+                : "items-center justify-between",
             )}
           >
             {collapsed ? (
-              <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Link
-                      href={`/project/${projectId}/settings`}
-                      className={cn(
-                        "flex size-8 items-center justify-center rounded-md transition-colors",
-                        segment === "settings"
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                      )}
-                    >
-                      <Settings className="size-4" />
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">{projectName} — Settings</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() => setCollapsed(false)}
-                      className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                    >
-                      <ChevronsRight className="size-4" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">Expand sidebar</TooltipContent>
-                </Tooltip>
-              </>
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                className="flex size-8 shrink-0 items-center justify-center rounded-md text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                title="Expand sidebar"
+              >
+                <PanelLeft className="size-4" />
+                <span className="sr-only">Expand sidebar</span>
+              </button>
             ) : (
               <>
-                <Link
-                  href={`/project/${projectId}/settings`}
-                  className={cn(
-                    "group/project flex min-w-0 items-center gap-2.5 rounded-md px-1 py-0.5 transition-colors hover:bg-accent",
-                    segment === "settings" && "bg-accent",
-                  )}
+                <SidebarMenuButton
+                  asChild
+                  tooltip="Morgan — home"
+                  className="min-w-0 flex-1 font-semibold hover:bg-transparent hover:text-sidebar-foreground data-active:bg-transparent data-active:text-sidebar-foreground"
                 >
-                  <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
-                  <h2 className="truncate text-sm font-semibold text-foreground">{projectName}</h2>
-                  <Settings className="size-3 shrink-0 text-muted-foreground/0 transition-colors group-hover/project:text-muted-foreground" />
-                </Link>
+                  <Link href="/app">
+                    <House />
+                    <span className="truncate group-data-[collapsible=icon]:hidden">Morgan</span>
+                  </Link>
+                </SidebarMenuButton>
                 <button
                   type="button"
-                  onClick={() => setCollapsed(true)}
-                  className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  onClick={toggleSidebar}
+                  className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  title="Collapse sidebar"
                 >
-                  <ChevronsLeft className="size-3.5" />
+                  <PanelLeft className="size-3.5" />
+                  <span className="sr-only">Collapse sidebar</span>
                 </button>
               </>
             )}
           </div>
 
-          {/* Search trigger */}
-          {collapsed ? (
-            <div className="flex min-h-10 items-center justify-center">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => setSearchOpen(true)}
-                    className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          <SidebarMenuButton
+            tooltip="Search ⌘K"
+            onClick={() => setSearchOpen(true)}
+            className="border border-border bg-background/50 text-muted-foreground hover:text-foreground"
+          >
+            <Search />
+            <span className="flex-1 text-left group-data-[collapsible=icon]:hidden">
+              Search
+            </span>
+            <kbd className="pointer-events-none flex h-5 items-center gap-0.5 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground group-data-[collapsible=icon]:hidden">
+              <span className="text-xs">⌘</span>K
+            </kbd>
+          </SidebarMenuButton>
+        </SidebarHeader>
+
+        <SidebarContent className="gap-3 overflow-hidden">
+          <SidebarGroup>
+            <SidebarMenu className="gap-2">
+              {primaryLinks.map(({ key, label, icon: Icon }) => (
+                <SidebarMenuItem key={key}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={segment === key}
+                    tooltip={label}
+                    className={cn(
+                      segment === key &&
+                        "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground data-active:bg-primary data-active:text-primary-foreground",
+                    )}
                   >
-                    <Search className="size-4 shrink-0" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right">Search &middot; ⌘K</TooltipContent>
-              </Tooltip>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setSearchOpen(true)}
-              className={cn(
-                "flex min-h-10 items-center gap-2.5 rounded-md border border-border bg-background/50 px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-              )}
+                    <Link href={`/project/${projectId}/${key}`}>
+                      <Icon />
+                      <span className="group-data-[collapsible=icon]:hidden">
+                        {label}
+                      </span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+
+          <SidebarGroup className="min-h-0 flex-1 overflow-hidden group-data-[collapsible=icon]:hidden">
+            <SidebarGroupLabel className="text-[11px] uppercase tracking-[0.22em]">Chats</SidebarGroupLabel>
+            <SidebarGroupAction
+              onClick={() => void startNewConversation()}
+              disabled={isCreatingConversation}
+              title={isCreatingConversation ? "Creating chat" : "New chat"}
+              className={cn(isCreatingConversation && "cursor-wait opacity-60")}
             >
-              <Search className="size-4 shrink-0" />
-              <span className="flex-1 text-left">Search</span>
-              <kbd className="pointer-events-none flex h-5 items-center gap-0.5 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
-                <span className="text-xs">⌘</span>K
-              </kbd>
-            </button>
-          )}
-
-          {/* Primary nav links */}
-          <nav className="flex flex-col gap-0.5">
-            {primaryLinks.map((link) => renderNavLink(link))}
-          </nav>
-
-          {/* Chats section */}
-          <div className="flex min-h-0 flex-1 flex-col gap-2">
-            {collapsed ? (
-              <>
-                {/* Collapsed: new-chat button + initial badges */}
-                <div className="flex flex-col items-center gap-1">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={() => void startNewConversation()}
-                        disabled={isCreatingConversation}
-                        className={cn(
-                          "flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                          isCreatingConversation && "cursor-wait opacity-60",
-                        )}
-                      >
-                        <Plus className="size-4" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">New chat</TooltipContent>
-                  </Tooltip>
-                </div>
-
-                <div className="flex min-h-0 flex-col items-center gap-1 overflow-y-auto">
-                  {conversationItems.length === 0 ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          onClick={() => void startNewConversation()}
-                          disabled={isCreatingConversation}
-                          className={cn(
-                            "flex size-8 items-center justify-center rounded-md text-xs font-medium transition-colors",
-                            segment === "chat"
-                              ? "bg-accent text-foreground"
-                              : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                            isCreatingConversation && "cursor-wait opacity-60",
-                          )}
-                        >
-                          <MessageSquare className="size-3.5" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right">New chat</TooltipContent>
-                    </Tooltip>
-                  ) : (
-                    conversationItems.map((c) => {
-                      const isActive =
-                        segment === "chat" &&
-                        (activeConversationId === c.id ||
-                          (!activeConversationId && c.id === conversationItems[0]?.id));
-
-                      return (
-                        <Tooltip key={c.id}>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={() => scheduleConversationNavigation(c.id)}
-                              className={cn(
-                                "flex size-8 items-center justify-center rounded-md text-xs font-semibold transition-colors",
-                                isActive
-                                  ? "bg-accent text-foreground"
-                                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                              )}
-                            >
-                              {getConversationInitial(c.title)}
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="right">
-                            <span className="block font-medium">{c.title}</span>
-                            <span className="text-muted-foreground">
-                              {formatChatListTime(c.last_activity_at ?? c.created_at)}
-                            </span>
-                          </TooltipContent>
-                        </Tooltip>
-                      );
-                    })
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                {/* Expanded: full chat list */}
-                <div className="flex items-center justify-between px-2">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
-                    Chats
-                  </p>
-                  <button
-                    type="button"
+              <Plus />
+              <span className="sr-only">New chat</span>
+            </SidebarGroupAction>
+            <SidebarMenu className="min-h-0 flex-1 gap-2 overflow-y-auto">
+              {conversationItems.length === 0 ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={segment === "chat"}
                     onClick={() => void startNewConversation()}
                     disabled={isCreatingConversation}
-                    className={cn(
-                      "flex size-5 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                      isCreatingConversation && "cursor-wait opacity-60",
-                    )}
-                    title={isCreatingConversation ? "Creating chat" : "New chat"}
+                    tooltip="New chat"
+                    className={cn(isCreatingConversation && "cursor-wait opacity-60")}
                   >
-                    <Plus className="size-3.5" />
-                  </button>
-                </div>
+                    <MessageSquare />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      New chat
+                    </span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : (
+                conversationItems.map((c) => {
+                  const isActive =
+                    segment === "chat" &&
+                    (activeConversationId === c.id ||
+                      (!activeConversationId && c.id === conversationItems[0]?.id));
+                  const isEditing = editingConversationId === c.id;
+                  const isPending = pendingConversationId === c.id;
 
-                <div className="flex min-h-0 flex-col gap-0.5 overflow-y-auto px-1 pr-1">
-                  {conversationItems.length === 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => void startNewConversation()}
-                      className={cn(
-                        "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
-                        segment === "chat"
-                          ? "bg-accent text-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                        isCreatingConversation && "cursor-wait opacity-60",
-                      )}
-                      disabled={isCreatingConversation}
-                    >
-                      <MessageSquare className="size-3.5 shrink-0" />
-                      <span className="truncate">New chat</span>
-                    </button>
-                  ) : (
-                    conversationItems.map((c) => {
-                      const isActive =
-                        segment === "chat" &&
-                        (activeConversationId === c.id ||
-                          (!activeConversationId && c.id === conversationItems[0]?.id));
-                      const isEditing = editingConversationId === c.id;
-                      const isPending = pendingConversationId === c.id;
+                  if (isEditing && !collapsed) {
+                    return (
+                      <SidebarMenuItem key={c.id}>
+                        <form onSubmit={(event) => handleRenameSubmit(event, c)}>
+                          <Input
+                            autoFocus
+                            value={draftTitle}
+                            onChange={(event) => setDraftTitle(event.target.value)}
+                            onBlur={() => {
+                              if (isPending) return;
+                              void submitConversationRename(c);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Escape") {
+                                event.preventDefault();
+                                cancelRenamingConversation();
+                              }
+                            }}
+                            disabled={isPending}
+                            className={cn(
+                              "h-9 rounded-md border-border/70 bg-background/90 text-sm shadow-none",
+                              isActive && "border-accent-foreground/15 bg-sidebar-accent",
+                            )}
+                          />
+                        </form>
+                      </SidebarMenuItem>
+                    );
+                  }
 
-                      return (
-                        <div
-                          key={c.id}
-                          className={cn("group/conversation relative", isPending && "opacity-70")}
-                        >
-                          {isEditing ? (
-                            <form onSubmit={(event) => handleRenameSubmit(event, c)}>
-                              <Input
-                                autoFocus
-                                value={draftTitle}
-                                onChange={(event) => setDraftTitle(event.target.value)}
-                                onBlur={() => {
-                                  if (isPending) return;
-                                  void submitConversationRename(c);
-                                }}
-                                onKeyDown={(event) => {
-                                  if (event.key === "Escape") {
-                                    event.preventDefault();
-                                    cancelRenamingConversation();
-                                  }
-                                }}
-                                disabled={isPending}
-                                className={cn(
-                                  "h-9 rounded-lg border-border/70 bg-background/90 pr-10 text-sm shadow-none",
-                                  isActive && "border-accent-foreground/15 bg-accent",
-                                )}
-                              />
-                            </form>
-                          ) : (
+                  return (
+                    <SidebarMenuItem key={c.id} className={cn(isPending && "opacity-70")}>
+                      <SidebarMenuButton
+                        size="lg"
+                        isActive={isActive}
+                        disabled={isPending}
+                        onClick={() => scheduleConversationNavigation(c.id)}
+                        tooltip={{
+                          children: (
                             <>
-                              <button
-                                type="button"
-                                onClick={() => scheduleConversationNavigation(c.id)}
-                                disabled={isPending}
-                                className={cn(
-                                  "flex w-full flex-col items-stretch gap-0.5 rounded-lg px-2.5 py-2 pr-10 text-left text-sm transition-colors",
-                                  isActive
-                                    ? "bg-accent text-foreground"
-                                    : "text-foreground hover:bg-accent",
-                                )}
-                              >
-                                <span
-                                  className="min-w-0 truncate"
-                                  title={c.title}
-                                  onDoubleClick={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    startRenamingConversation(c);
-                                  }}
-                                >
-                                  {truncateConversationTitle(c.title)}
-                                </span>
-                                <span
-                                  className={cn(
-                                    "font-mono text-[11px] leading-none tabular-nums",
-                                    isActive ? "text-foreground/60" : "text-muted-foreground",
-                                  )}
-                                  title={c.last_activity_at ?? c.created_at}
-                                >
-                                  {formatChatListTime(c.last_activity_at ?? c.created_at)}
-                                </span>
-                              </button>
-
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <button
-                                    type="button"
-                                    onClick={(event) => event.stopPropagation()}
-                                    disabled={isPending}
-                                    className={cn(
-                                      "absolute top-1/2 right-1.5 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-background/90 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 group-hover/conversation:opacity-100",
-                                      isActive && "hover:bg-background",
-                                      isPending && "opacity-100",
-                                    )}
-                                    title="Delete chat"
-                                  >
-                                    {isPending ? (
-                                      <Loader2 className="size-3.5 animate-spin" />
-                                    ) : (
-                                      <Trash2 className="size-3.5" />
-                                    )}
-                                  </button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent size="sm">
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete chat?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Remove <strong>{c.title}</strong> from your chat history? This cannot be undone.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      variant="destructive"
-                                      disabled={isPending}
-                                      onClick={() => void handleDeleteConversation(c.id, isActive)}
-                                    >
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                              <span className="block font-medium">{c.title}</span>
+                              <span className="text-muted-foreground">
+                                {formatChatListTime(c.last_activity_at ?? c.created_at)}
+                              </span>
                             </>
-                          )}
+                          ),
+                        }}
+                        className="group-data-[collapsible=icon]:!h-8"
+                      >
+                        <span className="hidden size-4 shrink-0 items-center justify-center text-xs font-semibold group-data-[collapsible=icon]:flex">
+                          {getConversationInitial(c.title)}
+                        </span>
+                        <div
+                          className="flex min-w-0 flex-1 flex-col items-start gap-0.5 overflow-hidden group-data-[collapsible=icon]:hidden"
+                          onDoubleClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            startRenamingConversation(c);
+                          }}
+                        >
+                          <span className="w-full truncate text-sm" title={c.title}>
+                            {truncateConversationTitle(c.title)}
+                          </span>
+                          <span
+                            className={cn(
+                              "font-mono text-[11px] leading-none tabular-nums",
+                              isActive ? "text-foreground/60" : "text-muted-foreground",
+                            )}
+                            title={c.last_activity_at ?? c.created_at}
+                          >
+                            {formatChatListTime(c.last_activity_at ?? c.created_at)}
+                          </span>
                         </div>
-                      );
-                    })
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+                      </SidebarMenuButton>
 
-      </aside>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <SidebarMenuAction
+                            showOnHover
+                            disabled={isPending}
+                            title="Delete chat"
+                            className={cn(
+                              "hover:text-destructive",
+                              isPending && "opacity-100",
+                            )}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {isPending ? (
+                              <Loader2 className="animate-spin" />
+                            ) : (
+                              <Trash2 />
+                            )}
+                            <span className="sr-only">Delete chat</span>
+                          </SidebarMenuAction>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent size="sm">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete chat?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Remove <strong>{c.title}</strong> from your chat history? This cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              variant="destructive"
+                              disabled={isPending}
+                              onClick={() => void handleDeleteConversation(c.id, isActive)}
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </SidebarMenuItem>
+                  );
+                })
+              )}
+            </SidebarMenu>
+          </SidebarGroup>
+        </SidebarContent>
+
+        <SidebarFooter className="mt-auto border-t border-sidebar-border p-0">
+          <SidebarMenu className="gap-1 p-2">
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={segment === "settings"}
+                tooltip="Project settings"
+                size="lg"
+                className={cn(
+                  "h-14 rounded-none px-1.5 py-2 hover:bg-sidebar-accent group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:rounded-md group-data-[collapsible=icon]:p-2",
+                  segment === "settings" &&
+                    "bg-sidebar-accent text-sidebar-accent-foreground",
+                )}
+              >
+                <Link href={`/project/${projectId}/settings`}>
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-sidebar-foreground text-sidebar group-data-[collapsible=icon]:size-4 group-data-[collapsible=icon]:rounded-none group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:text-sidebar-foreground">
+                    <Settings className="size-3.5" />
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5 pl-1 text-left group-data-[collapsible=icon]:hidden">
+                    <span className="truncate text-sm font-medium leading-none text-sidebar-foreground">
+                      {projectName}
+                    </span>
+                    <span className="text-[12px] leading-none text-muted-foreground">
+                      Project settings
+                    </span>
+                  </span>
+                  <ChevronsUpDown className="ml-auto size-4 shrink-0 text-muted-foreground group-data-[collapsible=icon]:hidden" />
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <SidebarMenuButton
+                    tooltip="Account"
+                    size="lg"
+                    className="h-11 rounded-md px-1.5 py-2 hover:bg-sidebar-accent group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-2"
+                  >
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full border border-sidebar-border bg-background font-mono text-xs font-medium text-sidebar-foreground group-data-[collapsible=icon]:size-4 group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-transparent">
+                      {getAccountInitial(userEmail)}
+                    </span>
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5 pl-1 text-left group-data-[collapsible=icon]:hidden">
+                      <span className="truncate text-sm font-medium leading-none text-sidebar-foreground">
+                        Account
+                      </span>
+                      <span className="truncate text-[12px] leading-none text-muted-foreground">
+                        {userEmail ?? "Signed in"}
+                      </span>
+                    </span>
+                    <ChevronsUpDown className="ml-auto size-4 shrink-0 text-muted-foreground group-data-[collapsible=icon]:hidden" />
+                  </SidebarMenuButton>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  side="right"
+                  align="end"
+                  sideOffset={10}
+                  className="w-64"
+                >
+                  <DropdownMenuLabel className="space-y-1">
+                    <span className="block text-xs font-medium text-foreground">Morgan</span>
+                    <span className="block truncate font-mono text-[11px] font-normal text-muted-foreground">
+                      {userEmail ?? "Signed in"}
+                    </span>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <div className="p-1">
+                    <ThemeToggle
+                      variant="ghost"
+                      showLabel
+                      className="h-8 w-full justify-start px-2"
+                    />
+                  </div>
+                  <DropdownMenuSeparator />
+                  <form action="/auth/signout" method="post">
+                    <DropdownMenuItem asChild variant="destructive">
+                      <button type="submit" className="w-full">
+                        <LogOut />
+                        Sign out
+                      </button>
+                    </DropdownMenuItem>
+                  </form>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+
+        <SidebarRail />
+      </Sidebar>
 
       <SearchCommand open={searchOpen} onOpenChange={setSearchOpen} />
-    </TooltipProvider>
+    </>
   );
 }

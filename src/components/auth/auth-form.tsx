@@ -21,7 +21,7 @@ type AuthMode = "login" | "signup";
 const copy = {
   login: {
     eyebrow: "Secure access",
-    title: "Sign in to your project advisor.",
+    title: "Sign in to Morgan.",
     description:
       "Pick up where you left off with persistent files, project memory, and shared project access.",
     button: "Sign in",

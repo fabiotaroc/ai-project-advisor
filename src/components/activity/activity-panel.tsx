@@ -189,8 +189,8 @@ export function ActivityPanel({
           ) : null}
         </div>
         <p className="text-[15px] text-muted-foreground">
-          What changed in this project — drafts the advisor proposed, sources you added, files
-          it edited.
+          What changed in this project — drafts Morgan proposed, sources you added, files
+          Morgan edited.
         </p>
       </header>
 
@@ -269,7 +269,7 @@ export function ActivityPanel({
         </Card>
       ) : (
         <Card className="rounded-xl border-dashed bg-card/60 p-10 text-center text-sm text-muted-foreground">
-          Nothing has happened yet. Once the advisor reads a source or finishes a chat, you&apos;ll
+          Nothing has happened yet. Once Morgan reads a source or finishes a chat, you&apos;ll
           see updates here.
         </Card>
       )}

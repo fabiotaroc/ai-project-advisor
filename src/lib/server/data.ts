@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { getSessionUser } from "@/lib/server/auth";
+import { reconcileStaleLibrarianRuns } from "@/lib/server/librarian/reconcile-stale-runs";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
@@ -212,6 +213,8 @@ async function getSourceDetailsForProject(
   filterSourceIds?: string[],
 ): Promise<SourceMaterialDetail[]> {
   if (filterSourceIds?.length === 0) return [];
+  await reconcileStaleLibrarianRuns(projectId);
+
   const supabase = await createSupabaseServerClient();
   let query = supabase
     .from("source_materials")
@@ -347,6 +350,8 @@ export async function getProjectSettings(projectId: string): Promise<ProjectSett
 
 export async function getActivity(projectId: string): Promise<ProjectActivity> {
   await getProjectForUser(projectId);
+
+  await reconcileStaleLibrarianRuns(projectId);
 
   const supabase = await createSupabaseServerClient();
   const [eventsResult, runsResult] = await Promise.all([

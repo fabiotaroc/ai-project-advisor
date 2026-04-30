@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { ThemeScript } from "@/components/providers/theme-script";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
@@ -15,8 +16,8 @@ const mono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Project Advisor",
-  description: "AI project advisor for persistent project memory.",
+  title: "Morgan",
+  description: "Morgan keeps persistent project memory and helps you work.",
 };
 
 export default function RootLayout({
@@ -30,6 +31,9 @@ export default function RootLayout({
       suppressHydrationWarning
       className={cn("h-full", body.variable, mono.variable, "font-sans")}
     >
+      <head>
+        <ThemeScript defaultTheme="system" attribute="class" />
+      </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ThemeProvider
           attribute="class"

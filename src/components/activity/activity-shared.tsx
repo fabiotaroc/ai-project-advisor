@@ -79,7 +79,7 @@ export function eventMeta(event: { event_type: string }): { label: string; Icon:
     return { label: "Source added", Icon: Upload };
   }
   if (event.event_type === "agent_file_edit") {
-    return { label: "Advisor edited a file", Icon: FileText };
+    return { label: "Morgan edited a file", Icon: FileText };
   }
   if (event.event_type === "file_edited") {
     return { label: "You edited a file", Icon: FileText };
