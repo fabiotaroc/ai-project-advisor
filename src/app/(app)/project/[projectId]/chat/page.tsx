@@ -5,6 +5,20 @@ import {
   getConversationWithMessages,
   getLatestConversationWithMessages,
 } from "@/lib/server/chat-history";
+import { getAccountProfile, type AccountProfile } from "@/lib/server/profile";
+
+function resolveUserGreetingName(
+  profile: AccountProfile | null,
+  fallbackEmail: string | null | undefined,
+): string {
+  const first = profile?.first_name?.trim();
+  if (first) return first;
+  const fullName = profile?.name?.trim();
+  if (fullName) return fullName;
+  const localPart = fallbackEmail?.split("@")[0]?.trim();
+  if (localPart) return localPart;
+  return "there";
+}
 
 export default async function ChatPage({
   params,
@@ -21,6 +35,7 @@ export default async function ChatPage({
 
   let activeId: string | undefined;
   let initialMessages: UIMessage[] = [];
+  const profilePromise = getAccountProfile(user.id).catch(() => null);
 
   if (conversationId) {
     const conversation = await getConversationWithMessages(projectId, user.id, conversationId);
@@ -37,11 +52,15 @@ export default async function ChatPage({
     }
   }
 
+  const profile = await profilePromise;
+  const userGreetingName = resolveUserGreetingName(profile, profile?.email ?? user.email);
+
   return (
     <ChatPanel
       projectId={projectId}
       chatId={activeId}
       initialMessages={initialMessages}
+      userGreetingName={userGreetingName}
     />
   );
 }

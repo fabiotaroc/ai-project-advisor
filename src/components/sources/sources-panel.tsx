@@ -10,14 +10,17 @@ import {
   type KeyboardEvent,
   type PointerEvent,
   type SetStateAction,
+  type ReactNode,
 } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
+  ClipboardList,
   Calendar,
-  HardDrive,
+  CircleHelp,
   FileUp,
   Loader2,
+  Paperclip,
   RotateCcw,
   Search,
   Trash2,
@@ -52,6 +55,7 @@ import { Input } from "@/components/ui/input";
 import { formatChatListTime, formatDate, formatDateTime } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import type { SourceMaterialDetail } from "@/lib/types";
+import { inputHrefForSource, inputViewForSourceType, type InputView } from "@/lib/source-routing";
 import {
   CitedSourcePreview,
   sourceHasPreviewContent,
@@ -89,12 +93,69 @@ function isVeryRecentSource(createdAt: string): boolean {
 }
 
 type SourceType = SourceMaterialDetail["type"];
-const SOURCE_TYPE_FILTERS: SourceType[] = ["meeting", "document", "email", "note"];
+
+const FILE_TYPE_FILTERS: SourceType[] = ["document", "note"];
 const SOURCE_LIST_WIDTH_STORAGE_KEY = "morgan:sources:list-width";
 const SOURCE_LIST_DEFAULT_WIDTH = 336;
 const SOURCE_LIST_MIN_WIDTH = 288;
 const SOURCE_LIST_MAX_WIDTH = 560;
 const SOURCE_DETAIL_MIN_WIDTH = 520;
+
+const VIEW_CONFIG: Record<
+  InputView,
+  {
+    title: string;
+    addLabel: string;
+    addDialogTitle: string;
+    addDialogDescription: string;
+    emptyState: string;
+    summaryTitle: string;
+    previewTitle: string;
+    metadataTitle: string;
+    detailPlaceholder: string;
+    typeFilters: SourceType[];
+  }
+> = {
+  files: {
+    title: "Files",
+    addLabel: "Add files",
+    addDialogTitle: "Add files",
+    addDialogDescription:
+      "Upload project materials and notes. Categories are auto-detected, then you can adjust before uploading.",
+    emptyState: "No files yet. Add a project file to get started.",
+    summaryTitle: "AI summary",
+    previewTitle: "Content preview",
+    metadataTitle: "File details",
+    detailPlaceholder: "Select a file to view its details.",
+    typeFilters: FILE_TYPE_FILTERS,
+  },
+  meetings: {
+    title: "Meetings",
+    addLabel: "Import meeting",
+    addDialogTitle: "Import meeting",
+    addDialogDescription:
+      "Upload transcripts or meeting notes. You can adjust the detected category before importing.",
+    emptyState: "No meetings yet. Import a transcript or meeting note to get started.",
+    summaryTitle: "Meeting summary",
+    previewTitle: "Transcript preview",
+    metadataTitle: "Meeting details",
+    detailPlaceholder: "Select a meeting to view its recap and transcript.",
+    typeFilters: ["meeting"],
+  },
+  emails: {
+    title: "Emails",
+    addLabel: "Import email",
+    addDialogTitle: "Import email",
+    addDialogDescription:
+      "Upload email messages to capture thread context and key follow-ups for the project.",
+    emptyState: "No emails yet. Import a thread or message to get started.",
+    summaryTitle: "Thread summary",
+    previewTitle: "Message preview",
+    metadataTitle: "Email details",
+    detailPlaceholder: "Select an email to view its thread context and message details.",
+    typeFilters: ["email"],
+  },
+};
 
 function clampSourceListWidth(value: number, maxWidth = SOURCE_LIST_MAX_WIDTH) {
   return Math.min(Math.max(value, SOURCE_LIST_MIN_WIDTH), maxWidth);
@@ -112,10 +173,13 @@ type ActiveCitation = {
 export function SourcesPanel({
   projectId,
   sources: initialSources,
+  view,
 }: {
   projectId: string;
   sources: SourceMaterialDetail[];
+  view: InputView;
 }) {
+  const viewConfig = VIEW_CONFIG[view];
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -127,7 +191,9 @@ export function SourcesPanel({
   const [retryingSourceId, setRetryingSourceId] = useState<string | null>(null);
   const [deletingSourceId, setDeletingSourceId] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState<SourceType | null>(null);
+  const [typeFilter, setTypeFilter] = useState<SourceType | null>(
+    viewConfig.typeFilters.length > 1 ? null : viewConfig.typeFilters[0] ?? null,
+  );
   const [selectedId, setSelectedId] = useState<string | null>(
     citedSourceId ?? initialSources[0]?.id ?? null,
   );
@@ -143,15 +209,17 @@ export function SourcesPanel({
   }, []);
 
   const sourceTypeCounts = useMemo(() => {
-    const counts = Object.fromEntries(SOURCE_TYPE_FILTERS.map((type) => [type, 0])) as Record<
+    const counts = Object.fromEntries(viewConfig.typeFilters.map((type) => [type, 0])) as Record<
       SourceType,
       number
     >;
     for (const source of sources) {
-      counts[source.type] += 1;
+      if (source.type in counts) {
+        counts[source.type] += 1;
+      }
     }
     return counts;
-  }, [sources]);
+  }, [sources, viewConfig.typeFilters]);
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -197,6 +265,14 @@ export function SourcesPanel({
 
   const handleSourceAdded = useCallback(
     (source: SourceMaterialDetail) => {
+      if (inputViewForSourceType(source.type) !== view) {
+        router.push(
+          inputHrefForSource(projectId, source.type, {
+            sourceId: source.id,
+          }),
+        );
+        return;
+      }
       setSources((prev) => {
         const existing = prev.findIndex((s) => s.id === source.id);
         if (existing >= 0) {
@@ -211,16 +287,27 @@ export function SourcesPanel({
       setActiveCitation(null);
       clearCitationParams();
     },
-    [clearCitationParams],
+    [clearCitationParams, projectId, router, view],
   );
 
-  const handleSourceReplaced = useCallback((source: SourceMaterialDetail) => {
-    setSources((prev) => prev.map((item) => (item.id === source.id ? source : item)));
-    setTypeFilter((current) => (current && current !== source.type ? null : current));
-    setSelectedId(source.id);
-    setActiveCitation(null);
-    clearCitationParams();
-  }, [clearCitationParams]);
+  const handleSourceReplaced = useCallback(
+    (source: SourceMaterialDetail) => {
+      if (inputViewForSourceType(source.type) !== view) {
+        router.push(
+          inputHrefForSource(projectId, source.type, {
+            sourceId: source.id,
+          }),
+        );
+        return;
+      }
+      setSources((prev) => prev.map((item) => (item.id === source.id ? source : item)));
+      setTypeFilter((current) => (current && current !== source.type ? null : current));
+      setSelectedId(source.id);
+      setActiveCitation(null);
+      clearCitationParams();
+    },
+    [clearCitationParams, projectId, router, view],
+  );
 
   const handleDeleteSource = useCallback(async (sourceId: string) => {
     if (deletingSourceId) return;
@@ -316,6 +403,8 @@ export function SourcesPanel({
         style={{ "--sources-list-width": `${sourceListWidth}px` } as CSSProperties}
       >
         <SourceList
+          view={view}
+          viewConfig={viewConfig}
           sources={filtered}
           totalCount={sources.length}
           projectId={projectId}
@@ -331,6 +420,8 @@ export function SourcesPanel({
           onResizeByKeyboard={nudgeSourceListWidth}
         />
         <SourceDetail
+          view={view}
+          viewConfig={viewConfig}
           source={selected}
           projectId={projectId}
           citationChunkId={selected?.id === activeCitation?.sourceId ? activeCitation.chunkId : null}
@@ -346,6 +437,8 @@ export function SourcesPanel({
 }
 
 function SourceList({
+  view,
+  viewConfig,
   sources,
   totalCount,
   projectId,
@@ -360,6 +453,8 @@ function SourceList({
   onResizeStart,
   onResizeByKeyboard,
 }: {
+  view: InputView;
+  viewConfig: (typeof VIEW_CONFIG)[InputView];
   sources: SourceMaterialDetail[];
   totalCount: number;
   projectId: string;
@@ -368,7 +463,7 @@ function SourceList({
   filter: string;
   onFilterChange: (value: string) => void;
   typeFilter: SourceType | null;
-  sourceTypeCounts: Record<SourceType, number>;
+  sourceTypeCounts: Partial<Record<SourceType, number>>;
   onTypeFilterChange: (type: SourceType | null) => void;
   onSourceAdded: (source: SourceMaterialDetail) => void;
   onResizeStart: (event: PointerEvent<HTMLDivElement>) => void;
@@ -378,11 +473,15 @@ function SourceList({
     <div className="relative flex min-h-0 w-full flex-col overflow-hidden border-b border-border/70 bg-card/40 p-2 lg:h-full lg:border-b-0 lg:border-r">
       <div className="shrink-0 border-b border-border/60 bg-card/95 px-1 pb-3 pt-1">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h1 className="min-w-0 text-lg font-semibold tracking-tight">Sources</h1>
+          <div className="min-w-0">
+            <h1 className="min-w-0 text-lg font-semibold tracking-tight">{viewConfig.title}</h1>
+          </div>
           <SourceAddDialog
             projectId={projectId}
             onSourceAdded={onSourceAdded}
-            triggerLabel="Add"
+            triggerLabel={viewConfig.addLabel}
+            dialogTitle={viewConfig.addDialogTitle}
+            dialogDescription={viewConfig.addDialogDescription}
           />
         </div>
         <div className="relative">
@@ -390,54 +489,57 @@ function SourceList({
           <Input
             value={filter}
             onChange={(event) => onFilterChange(event.target.value)}
-            placeholder="Search sources"
+            placeholder={`Search ${viewConfig.title.toLowerCase()}`}
             className="pl-8"
           />
         </div>
-        <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Filter sources by type">
-          {SOURCE_TYPE_FILTERS.map((type) => {
-            const active = typeFilter === type;
-            return (
-              <Button
-                key={type}
-                type="button"
-                variant="outline"
-                size="xs"
-                aria-pressed={active}
-                onClick={() => onTypeFilterChange(active ? null : type)}
-                className={cn(
-                  "h-6 rounded-4xl px-2 font-mono text-[10px] uppercase tracking-wide",
-                  active
-                    ? "border-transparent bg-sidebar-primary text-sidebar-primary-foreground shadow-sm hover:bg-sidebar-primary/90 hover:text-sidebar-primary-foreground focus-visible:ring-sidebar-primary/35"
-                    : "bg-background/60 text-muted-foreground",
-                )}
-              >
-                {sourceTypeIcon(type, "size-3")}
-                {typeLabel(type)}
-                <span
+        {view === "files" ? (
+          <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Filter files by type">
+            {viewConfig.typeFilters.map((type) => {
+              const active = typeFilter === type;
+              return (
+                <Button
+                  key={type}
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  aria-pressed={active}
+                  onClick={() => onTypeFilterChange(active ? null : type)}
                   className={cn(
-                    active ? "text-sidebar-primary-foreground/80" : "text-muted-foreground",
+                    "h-6 rounded-4xl px-2 font-mono text-[10px] uppercase tracking-wide",
+                    active
+                      ? "border-transparent bg-sidebar-primary text-sidebar-primary-foreground shadow-sm hover:bg-sidebar-primary/90 hover:text-sidebar-primary-foreground focus-visible:ring-sidebar-primary/35"
+                      : "bg-background/60 text-muted-foreground",
                   )}
                 >
-                  {sourceTypeCounts[type]}
-                </span>
-              </Button>
-            );
-          })}
-        </div>
+                  {sourceTypeIcon(type, "size-3")}
+                  {typeLabel(type)}
+                  <span
+                    className={cn(
+                      active ? "text-sidebar-primary-foreground/80" : "text-muted-foreground",
+                    )}
+                  >
+                    {sourceTypeCounts[type] ?? 0}
+                  </span>
+                </Button>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
         {sources.length === 0 ? (
           <div className="flex min-h-[12rem] flex-1 items-center justify-center px-4 py-10 text-center text-xs text-muted-foreground">
             {totalCount === 0
-              ? "No sources yet. Add a file to get started."
-              : "No sources match your filters."}
+              ? viewConfig.emptyState
+              : `No ${viewConfig.title.toLowerCase()} match your filters.`}
           </div>
         ) : (
           sources.map((source, index) => (
             <div key={source.id} className={cn(index > 0 && "border-t border-border/60")}>
               <SourceListRow
+                view={view}
                 source={source}
                 active={selectedId === source.id}
                 onSelect={() => onSelect(source.id)}
@@ -469,10 +571,12 @@ function SourceList({
 }
 
 function SourceListRow({
+  view,
   source,
   active,
   onSelect,
 }: {
+  view: InputView;
   source: SourceMaterialDetail;
   active: boolean;
   onSelect: () => void;
@@ -485,6 +589,7 @@ function SourceListRow({
   }
 
   const fileTypeLabel = sourceFileTypeShortLabel(source);
+  const displayTitle = sourceDisplayTitle(source, view);
 
   return (
     <div
@@ -504,12 +609,14 @@ function SourceListRow({
         )}
       />
       <div className="flex items-center gap-2">
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-          {fileGlyph(source.title, source.type, "size-3.5")}
-        </div>
+        {view !== "meetings" ? (
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+            {fileGlyph(source.title, source.type, "size-3.5")}
+          </div>
+        ) : null}
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
-            {source.title}
+            {displayTitle}
           </span>
           {isVeryRecentSource(source.created_at) && (
             <Badge
@@ -542,6 +649,8 @@ function SourceListRow({
 }
 
 function SourceDetail({
+  view,
+  viewConfig,
   source,
   projectId,
   citationChunkId,
@@ -551,6 +660,8 @@ function SourceDetail({
   onDelete,
   deletingSourceId,
 }: {
+  view: InputView;
+  viewConfig: (typeof VIEW_CONFIG)[InputView];
   source: SourceMaterialDetail | null;
   projectId: string;
   citationChunkId: string | null;
@@ -563,7 +674,7 @@ function SourceDetail({
   if (!source) {
     return (
       <div className="flex h-full min-h-[12rem] items-center justify-center p-6 text-center text-sm text-muted-foreground lg:min-h-0">
-        Select a source to view its details.
+        {viewConfig.detailPlaceholder}
       </div>
     );
   }
@@ -572,78 +683,72 @@ function SourceDetail({
   const mimeType = readMetaString(source.metadata, "mimeType");
   const canRetry = source.status === "processing" || source.status === "failed";
   const hasContentPreview = sourceHasPreviewContent(source, citationChunkId);
+  const displayTitle = sourceDisplayTitle(source, view);
+  const meetingInsights = view === "meetings" ? getMeetingInsights(source) : null;
+  const emailInsights = view === "emails" ? getEmailInsights(source) : null;
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col gap-8 overflow-y-auto overscroll-contain bg-background p-5">
-        <header className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              {sourceTypeIcon(source.type, "size-3")}
-              {typeLabel(source.type)}
-            </span>
-            {statusBadge(source.status)}
-            <Badge variant="outline" className="text-[10px]">
-              {source.chunk_count} {source.chunk_count === 1 ? "chunk" : "chunks"}
-            </Badge>
-          </div>
-          <div className="flex items-start justify-between gap-3">
-            <h2 className="min-w-0 flex-1 text-xl font-semibold tracking-tight">{source.title}</h2>
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-              <SourceReplaceDialog source={source} onSourceReplaced={onSourceReplaced} />
-              <SourceDeleteButton
-                source={source}
-                deleting={deletingSourceId === source.id}
-                onDelete={() => onDelete(source.id)}
-              />
-              {canRetry && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={retryingSourceId === source.id}
-                  onClick={() => onRetry(source.id)}
-                  title="Re-run extraction and embedding from the stored file"
-                >
-                  {retryingSourceId === source.id ? (
-                    <Loader2 data-icon="inline-start" className="animate-spin" />
-                  ) : (
-                    <RotateCcw data-icon="inline-start" />
-                  )}
-                  Retry ingestion
-                </Button>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5">
-              <UserRound className="size-3.5" />
-              {source.uploader?.name ?? source.uploader?.email ?? "Unknown uploader"}
-            </span>
-            <span>·</span>
-            <span className="inline-flex items-center gap-1.5">
-              <Calendar className="size-3.5" />
-              {formatDateTime(source.created_at)}
-            </span>
-            {originalSize !== null && (
-              <>
-                <span>·</span>
-                <span className="inline-flex items-center gap-1.5">
-                  <HardDrive className="size-3.5" />
-                  {formatBytes(originalSize)}
-                </span>
-              </>
+      <header className="flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="min-w-0 flex-1 text-xl font-semibold tracking-tight">{displayTitle}</h2>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <SourceReplaceDialog source={source} onSourceReplaced={onSourceReplaced} />
+            <SourceDeleteButton
+              source={source}
+              deleting={deletingSourceId === source.id}
+              onDelete={() => onDelete(source.id)}
+            />
+            {canRetry && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={retryingSourceId === source.id}
+                onClick={() => onRetry(source.id)}
+                title="Re-run extraction and embedding from the stored file"
+              >
+                {retryingSourceId === source.id ? (
+                  <Loader2 data-icon="inline-start" className="animate-spin" />
+                ) : (
+                  <RotateCcw data-icon="inline-start" />
+                )}
+                Retry ingestion
+              </Button>
             )}
           </div>
-        </header>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <UserRound className="size-3.5" />
+            {source.uploader?.name ?? source.uploader?.email ?? "Unknown uploader"}
+          </span>
+          <span>·</span>
+          <span className="inline-flex items-center gap-1.5">
+            <Calendar className="size-3.5" />
+            {formatDateTime(source.created_at)}
+          </span>
+        </div>
+      </header>
 
-        {source.summary ? (
-          <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_min(100%,14rem)] lg:items-stretch lg:gap-5">
+      {/* Meetings/emails: keep summary/preview content in the main column and metadata in the sidebar. */}
+      {view === "meetings" || view === "emails" ? (
+        <div className="flex min-h-0 min-w-0 flex-col gap-8">
+          <div className="grid min-h-0 w-full min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_min(100%,15rem)] lg:items-start lg:gap-5">
             <div className="flex min-h-0 min-w-0 flex-col gap-8">
-              <Section title="AI summary" className="min-w-0">
-                <p className="whitespace-pre-wrap text-sm leading-relaxed">{source.summary}</p>
-              </Section>
+              {source.summary ? (
+                <Section title={viewConfig.summaryTitle} className="min-w-0">
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{source.summary}</p>
+                </Section>
+              ) : null}
+              {view === "meetings" && meetingInsights ? (
+                <MeetingInsightGrid insights={meetingInsights} />
+              ) : null}
+              {view === "emails" && emailInsights ? (
+                <EmailInsightGrid insights={emailInsights} />
+              ) : null}
               {hasContentPreview ? (
-                <Section title="Content preview" className="min-w-0">
+                <Section title={viewConfig.previewTitle} className="min-w-0">
                   <CitedSourcePreview
                     key={`${source.id}:${citationChunkId ?? "preview"}`}
                     source={source}
@@ -652,27 +757,32 @@ function SourceDetail({
                 </Section>
               ) : null}
             </div>
-            <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-3">
-              <FileDetailsTable
-                source={source}
-                mimeType={mimeType}
-                originalSize={originalSize}
-              />
+            <div className="flex min-h-0 w-full min-w-0 flex-col gap-3 lg:max-w-[15rem]">
+              {view === "emails" && emailInsights ? (
+                <EmailMetaTable insights={emailInsights} />
+              ) : null}
+              {view === "emails" ? (
+                <FileDetailsTable
+                  source={source}
+                  mimeType={mimeType}
+                  originalSize={originalSize}
+                  title={viewConfig.metadataTitle}
+                />
+              ) : null}
               <LinkedArtifactsTable className="min-h-0 flex-1" source={source} projectId={projectId} />
             </div>
           </div>
-        ) : (
-          <>
-            <div className="grid w-full max-w-md gap-3 sm:grid-cols-2">
-              <FileDetailsTable
-                source={source}
-                mimeType={mimeType}
-                originalSize={originalSize}
-              />
-              <LinkedArtifactsTable source={source} projectId={projectId} />
-            </div>
+        </div>
+      ) : (
+        <div className="grid min-h-0 w-full min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_min(100%,15rem)] lg:items-start lg:gap-5">
+          <div className="flex min-h-0 min-w-0 flex-col gap-8">
+            {source.summary ? (
+              <Section title={viewConfig.summaryTitle} className="min-w-0">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed">{source.summary}</p>
+              </Section>
+            ) : null}
             {hasContentPreview ? (
-              <Section title="Content preview">
+              <Section title={viewConfig.previewTitle} className="min-w-0">
                 <CitedSourcePreview
                   key={`${source.id}:${citationChunkId ?? "preview"}`}
                   source={source}
@@ -680,9 +790,320 @@ function SourceDetail({
                 />
               </Section>
             ) : null}
-          </>
-        )}
+          </div>
+          <div className="flex min-h-0 w-full min-w-0 flex-col gap-3 lg:max-w-[15rem]">
+            <FileDetailsTable
+              source={source}
+              mimeType={mimeType}
+              originalSize={originalSize}
+              title={viewConfig.metadataTitle}
+            />
+            <LinkedArtifactsTable className="min-h-0 flex-1" source={source} projectId={projectId} />
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+type MeetingInsights = {
+  decisions: string[];
+  actionItems: string[];
+  openQuestions: string[];
+  date: string | null;
+  attendees: string[];
+};
+
+type EmailInsights = {
+  canonicalSubject: string | null;
+  from: string | null;
+  to: string | null;
+  cc: string | null;
+  date: string | null;
+  messageId: string | null;
+  inReplyTo: string | null;
+  references: string | null;
+  attachments: string[];
+  requestedActions: string[];
+};
+
+function sourceDisplayTitle(source: SourceMaterialDetail, view: InputView) {
+  if (view !== "emails") return source.title;
+  return extractMarkdownMetadataValue(source.parsed_content, "Canonical Thread Subject") ?? source.title;
+}
+
+function getMeetingInsights(source: SourceMaterialDetail): MeetingInsights {
+  return {
+    decisions: uniqueItems([
+      ...extractMarkdownBullets(source.summary, ["decisions", "key decisions"]),
+      ...extractMarkdownBullets(source.parsed_content, ["decisions", "key decisions"]),
+      ...extractKeywordLines(source.summary, [/decision/i, /decided/i, /agreed/i]),
+    ]).slice(0, 5),
+    actionItems: uniqueItems([
+      ...extractMarkdownBullets(source.summary, ["action items", "actions", "next steps", "follow-ups"]),
+      ...extractMarkdownBullets(source.parsed_content, [
+        "action items",
+        "actions",
+        "next steps",
+        "follow-ups",
+      ]),
+      ...extractKeywordLines(source.summary, [/action/i, /next step/i, /follow[- ]?up/i]),
+    ]).slice(0, 6),
+    openQuestions: uniqueItems([
+      ...extractMarkdownBullets(source.summary, ["open questions", "questions", "open items"]),
+      ...extractMarkdownBullets(source.parsed_content, ["open questions", "questions", "open items"]),
+      ...extractKeywordLines(source.summary, [/question/i, /open/i, /unclear/i]),
+    ]).slice(0, 5),
+    date: extractMarkdownMetadataValue(source.parsed_content, "Date"),
+    attendees: uniqueItems([
+      ...extractMarkdownBullets(source.parsed_content, ["attendees", "participants"]),
+      ...extractInlineList(extractMarkdownMetadataValue(source.parsed_content, "Attendees")),
+      ...extractInlineList(extractMarkdownMetadataValue(source.parsed_content, "Participants")),
+    ]).slice(0, 6),
+  };
+}
+
+function getEmailInsights(source: SourceMaterialDetail): EmailInsights {
+  return {
+    canonicalSubject: extractMarkdownMetadataValue(source.parsed_content, "Canonical Thread Subject"),
+    from: extractMarkdownMetadataValue(source.parsed_content, "From"),
+    to: extractMarkdownMetadataValue(source.parsed_content, "To"),
+    cc: extractMarkdownMetadataValue(source.parsed_content, "Cc"),
+    date: extractMarkdownMetadataValue(source.parsed_content, "Date"),
+    messageId: extractMarkdownMetadataValue(source.parsed_content, "Message ID"),
+    inReplyTo: extractMarkdownMetadataValue(source.parsed_content, "In-Reply-To"),
+    references: extractMarkdownMetadataValue(source.parsed_content, "References"),
+    attachments: uniqueItems(
+      extractMarkdownBullets(source.parsed_content, ["attachments"]).filter(
+        (item) => item.toLowerCase() !== "none",
+      ),
+    ).slice(0, 6),
+    requestedActions: uniqueItems([
+      ...extractMarkdownBullets(source.summary, ["action items", "requested actions", "next steps"]),
+      ...extractKeywordLines(source.summary, [/please/i, /follow[- ]?up/i, /next step/i, /action/i]),
+      ...extractKeywordLines(source.parsed_content, [/please/i, /could you/i, /can you/i]),
+    ]).slice(0, 5),
+  };
+}
+
+function MeetingInsightGrid({ insights }: { insights: MeetingInsights }) {
+  return (
+    <div className="flex min-h-0 min-w-0 flex-col gap-8">
+      <MeetingInsightTextSection
+        title="Decisions"
+        icon={<ClipboardList className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />}
+        items={insights.decisions}
+        emptyText="No decisions extracted yet."
+      />
+      <MeetingInsightTextSection
+        title="Action items"
+        icon={<ClipboardList className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />}
+        items={insights.actionItems}
+        emptyText="No action items extracted yet."
+      />
+      <MeetingInsightTextSection
+        title="Open questions"
+        icon={<CircleHelp className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />}
+        items={insights.openQuestions}
+        emptyText="No open questions extracted yet."
+      />
+    </div>
+  );
+}
+
+function MeetingInsightTextSection({
+  title,
+  icon,
+  items,
+  emptyText,
+}: {
+  title: string;
+  icon: ReactNode;
+  items: string[];
+  emptyText: string;
+}) {
+  return (
+    <section className="flex min-h-0 min-w-0 flex-col gap-2">
+      <h3 className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+        {icon}
+        <span>{title}</span>
+      </h3>
+      {items.length > 0 ? (
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+          {items.map((item) => `• ${item}`).join("\n\n")}
+        </p>
+      ) : (
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{emptyText}</p>
+      )}
+    </section>
+  );
+}
+
+function EmailInsightGrid({ insights }: { insights: EmailInsights }) {
+  return (
+    <div className="grid w-full min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-2">
+      <InsightListCard
+        title="Requested actions"
+        icon={<ClipboardList className="size-3.5" />}
+        items={insights.requestedActions}
+        emptyText="No requested actions extracted yet."
+      />
+      <InsightListCard
+        title="Attachments"
+        icon={<Paperclip className="size-3.5" />}
+        items={insights.attachments}
+        emptyText="No attachments listed in this email."
+      />
+    </div>
+  );
+}
+
+function EmailMetaTable({
+  insights,
+}: {
+  insights: EmailInsights;
+}) {
+  return (
+    <SidebarSection className="shrink-0" title="Thread details">
+      {insights.canonicalSubject ? <SidebarRow label="Thread" value={insights.canonicalSubject} /> : null}
+      {insights.from ? <SidebarRow label="From" value={insights.from} /> : null}
+      {insights.to ? <SidebarRow label="To" value={insights.to} /> : null}
+      {insights.cc ? <SidebarRow label="Cc" value={insights.cc} /> : null}
+      {insights.date ? <SidebarRow label="Date" value={insights.date} /> : null}
+      {insights.inReplyTo && insights.inReplyTo !== "(none)" ? (
+        <SidebarRow label="In reply to" value={<span className="font-mono text-[10px]">{insights.inReplyTo}</span>} />
+      ) : null}
+      {insights.messageId && insights.messageId !== "(missing)" ? (
+        <SidebarRow label="Message ID" value={<span className="font-mono text-[10px]">{insights.messageId}</span>} />
+      ) : null}
+      {insights.references && insights.references !== "(none)" ? (
+        <SidebarRow label="References" value={<span className="font-mono text-[10px]">{insights.references}</span>} />
+      ) : null}
+      {!insights.canonicalSubject && !insights.from && !insights.to ? (
+        <SidebarRow label="Status" value="Thread details will appear as more structure is extracted." />
+      ) : null}
+    </SidebarSection>
+  );
+}
+
+function InsightListCard({
+  title,
+  icon,
+  items,
+  emptyText,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  items: string[];
+  emptyText: string;
+}) {
+  return (
+    <div className="min-h-0 min-w-0 overflow-hidden rounded-xl border border-border/70 bg-card/40 p-4">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
+        <span className="text-muted-foreground">{icon}</span>
+        <span>{title}</span>
+      </div>
+      {items.length > 0 ? (
+        <ul className="max-h-[min(24rem,55vh)] space-y-2 overflow-y-auto overscroll-contain text-sm leading-6 text-foreground">
+          {items.map((item, index) => (
+            <li key={`${title}-${index}`} className="flex gap-2">
+              <span className="mt-2 size-1.5 shrink-0 rounded-full bg-primary/60" />
+              <span className="min-w-0 break-words">{item}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-muted-foreground">{emptyText}</p>
+      )}
+    </div>
+  );
+}
+
+function extractMarkdownBullets(markdown: string | null | undefined, headings: string[]) {
+  const section = findMarkdownSection(markdown, headings);
+  if (!section) return [];
+  return uniqueItems(
+    section
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => /^([-*]|\d+\.)\s+/.test(line))
+      .map((line) => line.replace(/^([-*]|\d+\.)\s+/, "").trim())
+      .filter(Boolean),
+  );
+}
+
+function extractMarkdownMetadataValue(markdown: string | null | undefined, label: string) {
+  if (!markdown) return null;
+  const pattern = new RegExp(
+    `^-\\s*\\*\\*${escapeRegex(label)}:\\*\\*\\s*(.+)$`,
+    "im",
+  );
+  const match = markdown.match(pattern);
+  return match?.[1]?.trim() ?? null;
+}
+
+function extractKeywordLines(text: string | null | undefined, patterns: RegExp[]) {
+  if (!text) return [];
+  return uniqueItems(
+    text
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && line.length <= 240)
+      .filter((line) => patterns.some((pattern) => pattern.test(line)))
+      .map((line) => line.replace(/^([-*]|\d+\.)\s+/, "").trim()),
+  );
+}
+
+function extractInlineList(value: string | null) {
+  if (!value || value === "(none)") return [];
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function findMarkdownSection(markdown: string | null | undefined, headings: string[]) {
+  if (!markdown) return null;
+  const normalizedTargets = new Set(headings.map((heading) => normalizeHeading(heading)));
+  const lines = markdown.split("\n");
+  let collecting = false;
+  const collected: string[] = [];
+
+  for (const line of lines) {
+    const headingMatch = line.match(/^\s{0,3}#{1,6}\s+(.*?)\s*$/);
+    if (headingMatch) {
+      const normalizedHeading = normalizeHeading(headingMatch[1] ?? "");
+      if (normalizedTargets.has(normalizedHeading)) {
+        collecting = true;
+        continue;
+      }
+      if (collecting) break;
+    }
+
+    if (collecting) {
+      collected.push(line);
+    }
+  }
+
+  const content = collected.join("\n").trim();
+  return content || null;
+}
+
+function normalizeHeading(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ");
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function uniqueItems(items: string[]) {
+  return Array.from(
+    new Set(
+      items
+        .map((item) => item.replace(/`/g, "").replace(/\s+/g, " ").trim())
+        .filter(Boolean),
+    ),
   );
 }
 
@@ -893,13 +1314,15 @@ function FileDetailsTable({
   source,
   mimeType,
   originalSize,
+  title = "File details",
 }: {
   source: SourceMaterialDetail;
   mimeType: string | null;
   originalSize: number | null;
+  title?: string;
 }) {
   return (
-    <SidebarSection className="shrink-0" title="File details">
+    <SidebarSection className="shrink-0" title={title}>
       <SidebarRow label="Type" value={typeLabel(source.type)} />
       <SidebarRow label="Created" value={formatDateTime(source.created_at)} />
       {source.updated_at && source.updated_at !== source.created_at && (

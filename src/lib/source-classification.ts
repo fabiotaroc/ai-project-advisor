@@ -179,7 +179,7 @@ function readSnippet(file: File, maxBytes: number): Promise<string> {
 export function categoryLabel(cat: SourceCategory): string {
   switch (cat) {
     case "email": return "Email";
-    case "document": return "Deliverable";
+    case "document": return "File";
     case "meeting": return "Meeting Transcript";
     case "note": return "Note";
   }

@@ -631,7 +631,9 @@ function subjectHrefFor(run: LibrarianRun, projectId: string): string | null {
     return `/project/${projectId}/chat?c=${run.trigger_ref}`;
   }
   if (run.trigger_type === "source_ingested") {
-    return `/project/${projectId}/sources`;
+    return run.trigger_ref
+      ? `/project/${projectId}/sources?source=${encodeURIComponent(run.trigger_ref)}`
+      : `/project/${projectId}/sources`;
   }
   if (run.trigger_type === "wiki_lint") {
     return `/project/${projectId}/files`;
@@ -641,7 +643,9 @@ function subjectHrefFor(run: LibrarianRun, projectId: string): string | null {
 
 function eventHrefFor(event: ActivityEvent, projectId: string): string | null {
   if (event.event_type === "source_ingested") {
-    return `/project/${projectId}/sources`;
+    return event.target_id
+      ? `/project/${projectId}/sources?source=${encodeURIComponent(event.target_id)}`
+      : `/project/${projectId}/sources`;
   }
   if (
     event.event_type === "agent_file_edit" ||

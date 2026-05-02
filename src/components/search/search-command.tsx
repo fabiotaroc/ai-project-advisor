@@ -22,6 +22,7 @@ type SearchResult = {
   title: string;
   excerpt: string;
   similarity: number | null;
+  sourceMaterialId?: string;
 };
 
 export function SearchCommand({
@@ -108,9 +109,13 @@ export function SearchCommand({
   function handleSelect(result: SearchResult) {
     onOpenChange(false);
     if (result.type === "file") {
-      router.push(`/project/${projectId}/files/${result.id}`);
-    } else {
       router.push(`/project/${projectId}/search?q=${encodeURIComponent(query)}`);
+    } else {
+      router.push(
+        result.sourceMaterialId
+          ? `/project/${projectId}/sources?source=${encodeURIComponent(result.sourceMaterialId)}`
+          : `/project/${projectId}/search?q=${encodeURIComponent(query)}`,
+      );
     }
   }
 
@@ -119,12 +124,12 @@ export function SearchCommand({
       open={open}
       onOpenChange={onOpenChange}
       title="Search"
-      description="Search across wiki files and ingested sources"
+      description="Search across wiki files and project inputs"
       className="sm:max-w-xl"
     >
       <Command shouldFilter={false}>
         <CommandInput
-          placeholder="Search files, sources, and memories..."
+          placeholder="Search wiki, files, meetings, emails, and memories..."
           value={query}
           onValueChange={setQuery}
         />
@@ -175,7 +180,7 @@ export function SearchCommand({
           )}
 
           {!isSearching && sourceResults.length > 0 && (
-            <CommandGroup heading="Sources">
+            <CommandGroup heading="Project inputs">
               {sourceResults.map((result) => (
                 <CommandItem
                   key={`source-${result.id}`}

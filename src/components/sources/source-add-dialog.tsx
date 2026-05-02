@@ -25,10 +25,14 @@ export function SourceAddDialog({
   projectId,
   onSourceAdded,
   triggerLabel = "Add source",
+  dialogTitle = "Add source",
+  dialogDescription = "Drop files to stage them. Categories are auto-detected, then you can adjust before uploading.",
 }: {
   projectId: string;
   onSourceAdded: (source: SourceMaterialDetail) => void;
   triggerLabel?: string;
+  dialogTitle?: string;
+  dialogDescription?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
@@ -162,10 +166,8 @@ export function SourceAddDialog({
       </DialogTrigger>
       <DialogContent className="sm:max-w-2xl" showCloseButton={!isUploadLocked}>
         <DialogHeader className="pr-8">
-          <DialogTitle>Add source</DialogTitle>
-          <DialogDescription>
-            Drop files to stage them. Categories are auto-detected, then you can adjust before uploading.
-          </DialogDescription>
+          <DialogTitle>{dialogTitle}</DialogTitle>
+          <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
 
         {showStatusPanel && (

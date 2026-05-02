@@ -11,7 +11,6 @@ import {
   ChevronLeft,
   ChevronRight,
   FilePenLine,
-  MessageSquareQuote,
   SendHorizontal,
 } from "lucide-react";
 import Link from "next/link";
@@ -37,13 +36,6 @@ import {
   renderCitationMarkersAsMarkdownLinks,
   type CitationItem,
 } from "@/lib/chat-citations";
-
-const SUGGESTED_PROMPTS = [
-  "Summarize the current project direction and any open risks.",
-  "Review the uploaded sources and tell me what we still do not know.",
-  "Draft an update to WORK.md based on the latest findings.",
-  "Compare what PROJECT.md says against the source material.",
-];
 
 const THINKING_PHRASES = [
   "Thinking...",
@@ -907,35 +899,68 @@ function PendingAssistantCard({ status }: { status: string }) {
   );
 }
 
-function EmptyState({
-  onSuggestion,
-  isBusy,
-}: {
-  onSuggestion: (prompt: string) => void;
-  isBusy: boolean;
-}) {
+function timeOfDayGreetingLabel(date = new Date()) {
+  const hour = date.getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function EmptyState({ userDisplayName }: { userDisplayName: string }) {
+  const salutation = timeOfDayGreetingLabel();
+
   return (
-    <div className="flex h-full min-h-[28rem] flex-col items-center justify-center gap-5 px-4 text-center">
-      <div className="max-w-2xl space-y-2">
-        <h2 className="font-heading text-2xl tracking-tight text-foreground">Ask anything about the project</h2>
-        <p className="text-sm leading-7 text-muted-foreground">
-          Look through project files, search uploaded source material, and update project documents when you ask for concrete changes.
-        </p>
-      </div>
-      <div className="grid w-full max-w-3xl gap-3 sm:grid-cols-2">
-        {SUGGESTED_PROMPTS.map((prompt) => (
-          <Button
-            key={prompt}
-            type="button"
-            variant="outline"
-            className="h-auto justify-start rounded-xl px-4 py-3 text-left whitespace-normal"
-            disabled={isBusy}
-            onClick={() => onSuggestion(prompt)}
-          >
-            <MessageSquareQuote data-icon="inline-start" />
-            <span className="leading-6">{prompt}</span>
-          </Button>
-        ))}
+    <div className="flex h-full min-h-[28rem] flex-col items-center justify-center px-4 text-center">
+      <style>
+        {`
+          @keyframes advisor-chat-greeting-rise {
+            from {
+              opacity: 0;
+              transform: translateY(0.5rem);
+              filter: blur(10px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+              filter: blur(0);
+            }
+          }
+          @keyframes advisor-chat-greeting-name {
+            from {
+              opacity: 0;
+              filter: blur(8px);
+            }
+            to {
+              opacity: 1;
+              filter: blur(0);
+            }
+          }
+          .advisor-chat-greeting-open {
+            animation: advisor-chat-greeting-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+          }
+          .advisor-chat-greeting-name-line {
+            animation: advisor-chat-greeting-name 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.18s both;
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .advisor-chat-greeting-open,
+            .advisor-chat-greeting-name-line {
+              animation: none !important;
+              opacity: 1 !important;
+              transform: none !important;
+              filter: none !important;
+            }
+          }
+        `}
+      </style>
+      <div className="max-w-4xl px-2">
+        <h2 className="font-heading text-[clamp(1.875rem,4.5vmin,3rem)] font-medium leading-snug tracking-tight text-balance">
+          <span className="advisor-chat-greeting-open inline-block text-foreground/90">
+            {salutation},
+          </span>{" "}
+          <span className="advisor-chat-greeting-name-line inline-block text-foreground">
+            {userDisplayName}
+          </span>
+        </h2>
       </div>
     </div>
   );
@@ -947,15 +972,17 @@ export function ChatPanel({
   projectId,
   chatId,
   initialMessages = [],
+  userGreetingName,
 }: {
   projectId: string;
   chatId?: string;
   initialMessages?: UIMessage[];
   conversations?: ConversationSummary[];
+  userGreetingName: string;
 }) {
   const router = useRouter();
   const [input, setInput] = useState("");
-  const [railCollapsed, setRailCollapsed] = useState(false);
+  const [railCollapsed, setRailCollapsed] = useState(true);
   const [hoveredRailCitationKey, setHoveredRailCitationKey] = useState<string | null>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -963,6 +990,7 @@ export function ChatPanel({
   const isScrollingToBottomRef = useRef(false);
   const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shouldStickToBottomRef = useRef(true);
+  const prevCitationCountRef = useRef<number | null>(null);
 
   const stableChatId = chatId ?? `${projectId}-new`;
   const transport = useMemo(
@@ -984,12 +1012,31 @@ export function ChatPanel({
     },
   });
 
+  useEffect(() => {
+    prevCitationCountRef.current = null;
+    setRailCollapsed(true);
+  }, [stableChatId]);
+
   const isBusy = status === "submitted" || status === "streaming";
 
   const railData = useMemo(
     () => buildRailData(messages),
     [messages]
   );
+  const citationCount = railData.citations.length;
+  const citationRailVisible = citationCount > 0;
+
+  useEffect(() => {
+    const prev = prevCitationCountRef.current;
+    prevCitationCountRef.current = citationCount;
+
+    // Skip the baseline pass so chats that already contain citations mount collapsed.
+    if (prev === null) return;
+
+    if (citationCount > prev) {
+      setRailCollapsed(false);
+    }
+  }, [citationCount]);
   const streamingStatus = useMemo(
     () => getStreamingStatus(messages, status),
     [messages, status]
@@ -1099,16 +1146,18 @@ export function ChatPanel({
     <section
       className={cn(
         "-m-4 grid h-svh grid-cols-1 gap-0 bg-background",
-        railCollapsed
-          ? "xl:grid-cols-[minmax(0,1fr)_auto]"
-          : "xl:grid-cols-[minmax(0,1fr)_19rem]"
+        !citationRailVisible
+          ? "xl:grid-cols-[minmax(0,1fr)]"
+          : railCollapsed
+            ? "xl:grid-cols-[minmax(0,1fr)_auto]"
+            : "xl:grid-cols-[minmax(0,1fr)_19rem]"
       )}
     >
       <div className="flex min-h-0 flex-col overflow-hidden bg-background">
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
           <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
             {messages.length === 0 ? (
-              <EmptyState isBusy={isBusy} onSuggestion={(prompt) => void submitText(prompt)} />
+              <EmptyState userDisplayName={userGreetingName} />
             ) : (
               <>
                 {messages.map((message, index) => {
@@ -1216,15 +1265,17 @@ export function ChatPanel({
         </div>
       </div>
 
-      <ChatRail
-        projectId={projectId}
-        citations={railData.citations}
-        memoryDrafts={railData.memoryDrafts}
-        facts={railData.facts}
-        collapsed={railCollapsed}
-        onToggle={() => setRailCollapsed((value) => !value)}
-        highlightedCitationKey={hoveredRailCitationKey}
-      />
+      {citationRailVisible ? (
+        <ChatRail
+          projectId={projectId}
+          citations={railData.citations}
+          memoryDrafts={railData.memoryDrafts}
+          facts={railData.facts}
+          collapsed={railCollapsed}
+          onToggle={() => setRailCollapsed((value) => !value)}
+          highlightedCitationKey={hoveredRailCitationKey}
+        />
+      ) : null}
     </section>
   );
 }

@@ -194,9 +194,12 @@ export async function getProjectFiles(projectId: string) {
   return (data ?? []) as ProjectFile[];
 }
 
-export async function getSources(projectId: string): Promise<SourceMaterialDetail[]> {
+export async function getSources(
+  projectId: string,
+  filterTypes?: SourceMaterial["type"][],
+): Promise<SourceMaterialDetail[]> {
   await getProjectForUser(projectId);
-  return getSourceDetailsForProject(projectId);
+  return getSourceDetailsForProject(projectId, undefined, filterTypes);
 }
 
 export async function getSourceDetail(
@@ -211,6 +214,7 @@ export async function getSourceDetail(
 async function getSourceDetailsForProject(
   projectId: string,
   filterSourceIds?: string[],
+  filterTypes?: SourceMaterial["type"][],
 ): Promise<SourceMaterialDetail[]> {
   if (filterSourceIds?.length === 0) return [];
   await reconcileStaleLibrarianRuns(projectId);
@@ -226,6 +230,10 @@ async function getSourceDetailsForProject(
 
   if (filterSourceIds) {
     query = query.in("id", filterSourceIds);
+  }
+
+  if (filterTypes?.length) {
+    query = query.in("type", filterTypes);
   }
 
   const { data: rows, error } = await query;

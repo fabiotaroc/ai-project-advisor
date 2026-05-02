@@ -46,7 +46,7 @@ export function SearchPanel({ projectId }: { projectId: string }) {
     <div className="flex flex-col gap-4">
       <h1 className="text-lg font-semibold tracking-tight">Search</h1>
       <p className="text-sm text-muted-foreground">
-        Search across wiki files (text match) and ingested sources (semantic search).
+        Search across wiki files (text match) and project inputs (semantic search).
       </p>
       <form
         className="flex gap-2"
@@ -63,7 +63,7 @@ export function SearchPanel({ projectId }: { projectId: string }) {
             id="search-query"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search files, sources, and memories..."
+            placeholder="Search wiki, files, meetings, emails, and memories..."
           />
         </div>
         <Button type="submit" disabled={!query.trim() || isSearching}>
@@ -91,7 +91,7 @@ export function SearchPanel({ projectId }: { projectId: string }) {
                   <div className="flex items-center gap-2">
                     <h2 className="truncate text-sm font-semibold">{result.title}</h2>
                     <Badge variant="outline" className="shrink-0 text-[10px]">
-                      {result.type === "file" ? "Wiki" : "Source"}
+                      {result.type === "file" ? "Wiki" : "Input"}
                     </Badge>
                     {result.similarity != null && (
                       <span className="shrink-0 text-[10px] text-muted-foreground">

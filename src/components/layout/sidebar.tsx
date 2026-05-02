@@ -12,12 +12,14 @@ import {
   House,
   Library,
   Loader2,
+  Mail,
   MessageSquare,
   PanelLeft,
   Plus,
   Search,
   Settings,
   Trash2,
+  Users,
 } from "lucide-react";
 import { SearchCommand } from "@/components/search/search-command";
 import {
@@ -59,7 +61,9 @@ import { cn } from "@/lib/utils";
 
 const primaryLinks = [
   { key: "files", label: "Wiki", icon: Library },
-  { key: "sources", label: "Sources", icon: BookOpen },
+  { key: "sources", label: "Files", icon: BookOpen },
+  { key: "meetings", label: "Meetings", icon: Users },
+  { key: "emails", label: "Emails", icon: Mail },
   { key: "activity", label: "Activity", icon: Activity },
 ] as const;
 

@@ -77,7 +77,7 @@ export function typeLabel(type: SourceMaterial["type"]): string {
     case "email":
       return "Email";
     case "document":
-      return "Deliverable";
+      return "File";
     case "meeting":
       return "Meeting";
     case "note":
