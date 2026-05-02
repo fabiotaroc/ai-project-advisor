@@ -81,6 +81,15 @@ export function eventMeta(event: { event_type: string }): { label: string; Icon:
   if (event.event_type === "agent_file_edit") {
     return { label: "Morgan edited a file", Icon: FileText };
   }
+  if (event.event_type === "agent_file_rename") {
+    return { label: "Morgan renamed a file", Icon: MoveRight };
+  }
+  if (event.event_type === "agent_file_delete") {
+    return { label: "Morgan deleted a file", Icon: Trash2 };
+  }
+  if (event.event_type === "advisor_suggestion") {
+    return { label: "Morgan suggested a follow-up", Icon: Sparkles };
+  }
   if (event.event_type === "file_edited") {
     return { label: "You edited a file", Icon: FileText };
   }

@@ -9,8 +9,8 @@ import {
   buildLibrarianTools,
   type LibrarianMode,
   type LibrarianRunRecord,
-  type LibrarianToolContext,
-} from "@/lib/server/librarian/tools";
+  type LibrarianToolContextInput,
+} from "@/lib/server/agent-tools";
 
 const LIBRARIAN_MODEL = "gpt-5.4";
 const LIBRARIAN_STEP_BUDGET = 40;
@@ -96,7 +96,7 @@ export async function runLibrarian({
   const runId = runRow.id;
   const record: LibrarianRunRecord = { actions: [], suggestions: [] };
 
-  const toolCtx: LibrarianToolContext = {
+  const toolCtx: LibrarianToolContextInput = {
     projectId,
     userId,
     runId,
@@ -348,6 +348,7 @@ function buildLibrarianSystemPrompt({
       "- delete_file — soft-delete a file (never touches locked or source-of-truth files)",
       "- search_sources / read_source — consult raw ingested sources",
       "- record_suggestion — record a forward-looking question-to-investigate / source-to-find / fix for the user (use ONLY for lint runs; never for file changes)",
+      "- trigger_wiki_lint — only works from chat; during Librarian runs this tool returns an error — ignore it and continue",
       "",
       "Every edit/create/delete/rename requires a short `reason` arg. After you finish, return a one-paragraph summary of what you did (no lists, no preamble). Do not call record_suggestion outside of wiki_lint runs.",
     ].join("\n"),

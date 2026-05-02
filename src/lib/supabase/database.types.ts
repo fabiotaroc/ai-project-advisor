@@ -500,6 +500,27 @@ export type Database = {
           source_material_id: string
         }[]
       }
+      match_source_chunks_hybrid: {
+        Args: {
+          p_lexical_pool?: number
+          p_match_count?: number
+          p_project_id: string
+          p_query_embedding: string
+          p_query_text: string
+          p_semantic_pool?: number
+        }
+        Returns: {
+          char_end: number | null
+          char_start: number | null
+          chunk_id: string
+          content: string
+          lexical_rank: number | null
+          match_kind: string
+          semantic_similarity: number | null
+          similarity: number
+          source_material_id: string
+        }[]
+      }
       user_has_project_access: {
         Args: { p_project_id: string }
         Returns: boolean

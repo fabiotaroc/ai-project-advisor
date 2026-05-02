@@ -1,7 +1,20 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { ProjectSettings } from "@/lib/types";
+import {
+  resolveAdvisorToolMode,
+  type AgentRunMode,
+} from "@/lib/server/agent-tools";
 
-export async function assembleProjectSystemPrompt(projectId: string, userId: string) {
+export type AssembledChatPrompt = {
+  system: string;
+  toolMode: AgentRunMode;
+  canCreateEntityPages: boolean;
+};
+
+export async function assembleProjectSystemPrompt(
+  projectId: string,
+  userId: string,
+): Promise<AssembledChatPrompt> {
   const supabase = await createSupabaseServerClient();
 
   const [
@@ -34,6 +47,9 @@ export async function assembleProjectSystemPrompt(projectId: string, userId: str
 
   const fileMap = new Map((coreFiles ?? []).map((f) => [f.path, f.content]));
   const role = project?.owner_id === userId ? "owner" : (member?.role ?? "viewer");
+  const projectSettings = settings as ProjectSettings | null;
+  const toolMode = resolveAdvisorToolMode(projectSettings);
+  const canCreateEntityPages = projectSettings?.auto_create_entity_pages ?? true;
 
   const parts: string[] = [];
 
@@ -46,9 +62,13 @@ export async function assembleProjectSystemPrompt(projectId: string, userId: str
 
   parts.push(`# Project: ${project?.name ?? "Unknown"}`);
 
-  parts.push(serializeSettings(settings as ProjectSettings | null));
+  parts.push(serializeSettings(projectSettings));
 
   parts.push(`# Current User\n${profile?.name ?? "Unknown"} (${profile?.email ?? ""}) — role: ${role}`);
+
+  parts.push(
+    `# Mode\n${toolMode === "write" ? "write — file tools apply changes to the wiki immediately (subject to locks and your role)." : "proposal — file tools record intent only; nothing is written until an editor applies changes. Still call the tools you would have used so the transcript shows what you recommend."}`,
+  );
 
   const glossary = fileMap.get("glossary.md");
   if (glossary) {
@@ -80,13 +100,18 @@ export async function assembleProjectSystemPrompt(projectId: string, userId: str
   parts.push(
     [
       "# Available Tools",
-      "- list_files — list all project files with display metadata (pinned, visibility, locked, source of truth)",
+      "- list_files — inventory of live project files with metadata",
       "- read_file — read a project file by path",
-      "- edit_file — create or update a project file (locked files will be rejected). The Librarian keeps index.md and log.md in sync; focus your edits on content pages.",
-      "- search_sources — semantic search across ingested source material chunks",
-      "- read_source — read the full content of an ingested source material",
-      "- trigger_wiki_lint — kick off a background Librarian health-check run (stale content, contradictions, orphans, missing entity pages, index gaps). Optional `focus`: topic/path to check, **or** the user’s exact factual correction (same entity, merge request). For corrections, quote the user literally; do not rephrase into a hypothetical. Use whenever the user asks to lint/curate/audit/check the wiki; do not attempt to perform the lint yourself.",
+      "- create_file — create a new file (fails if one exists at the path); requires `reason`",
+      "- edit_file — create or overwrite a file’s content; requires `reason`; for is_source_of_truth files pass confirm_source_of_truth: true",
+      "- rename_file — move a file; requires `reason`",
+      "- delete_file — soft-delete a file; locked and source-of-truth files rejected; requires `reason`",
+      "- search_sources — hybrid semantic + keyword search over ingested source chunks",
+      "- read_source — full source material by id (only ids from search_sources)",
+      "- record_suggestion — log a question/source/fix for the user; not for file edits",
+      "- trigger_wiki_lint — background wiki health check; optional `focus` (scope or user’s verbatim correction). Use when they ask to lint/curate/audit the wiki.",
       "- Only call read_source with a sourceMaterialId returned by search_sources. If search_sources returns no results, do not call read_source.",
+      "- The background Librarian keeps index.md and log.md in sync after chat; do not micromanage those from chat.",
     ].join("\n"),
   );
 
@@ -101,7 +126,11 @@ export async function assembleProjectSystemPrompt(projectId: string, userId: str
     ].join("\n"),
   );
 
-  return parts.join("\n\n");
+  return {
+    system: parts.join("\n\n"),
+    toolMode,
+    canCreateEntityPages,
+  };
 }
 
 function serializeSettings(settings: ProjectSettings | null): string {

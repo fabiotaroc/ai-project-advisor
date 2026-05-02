@@ -643,8 +643,18 @@ function eventHrefFor(event: ActivityEvent, projectId: string): string | null {
   if (event.event_type === "source_ingested") {
     return `/project/${projectId}/sources`;
   }
-  if (event.event_type === "agent_file_edit" || event.event_type === "file_edited") {
+  if (
+    event.event_type === "agent_file_edit" ||
+    event.event_type === "agent_file_rename" ||
+    event.event_type === "agent_file_delete" ||
+    event.event_type === "file_edited"
+  ) {
     return `/project/${projectId}/files`;
+  }
+  if (event.event_type === "advisor_suggestion") {
+    return event.target_id
+      ? `/project/${projectId}/chat?c=${event.target_id}`
+      : `/project/${projectId}/chat`;
   }
   return null;
 }
