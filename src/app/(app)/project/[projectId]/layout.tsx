@@ -5,6 +5,7 @@ import { ProjectSidebar } from "@/components/layout/sidebar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { getProjectForUser } from "@/lib/server/data";
 import { getSessionUser } from "@/lib/server/auth";
+import { getAccountProfile } from "@/lib/server/profile";
 import { listProjectConversations } from "@/lib/server/chat-history";
 
 export default async function ProjectLayout({
@@ -23,7 +24,10 @@ export default async function ProjectLayout({
 
   if (!project) notFound();
 
-  const conversations = await listProjectConversations(projectId, user.id);
+  const [conversations, profile] = await Promise.all([
+    listProjectConversations(projectId, user.id),
+    getAccountProfile(user.id).catch(() => null),
+  ]);
   const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
 
   return (
@@ -40,7 +44,10 @@ export default async function ProjectLayout({
         <ProjectSidebar
           projectId={projectId}
           projectName={project.name}
-          userEmail={user.email ?? null}
+          userEmail={profile?.email ?? user.email ?? null}
+          userFirstName={profile?.first_name ?? null}
+          userLastName={profile?.last_name ?? null}
+          userAvatarUrl={profile?.avatar_url ?? null}
           conversations={conversations}
         />
         <div className="min-w-0 flex-1 p-4">{children}</div>

@@ -35,40 +35,36 @@ Main mismatches:
 These are low-risk changes that would make the app immediately feel closer to the design system.
 
 1. **Adopt fonts**
-   - Replace `Inter` with `Geist` in `src/app/layout.tsx`.
-   - Replace `JetBrains_Mono` with `Geist_Mono`.
-   - Keep existing CSS variables (`--font-body`, `--font-mono`) so component code barely changes.
-
+  - Replace `Inter` with `Geist` in `src/app/layout.tsx`.
+  - Replace `JetBrains_Mono` with `Geist_Mono`.
+  - Keep existing CSS variables (`--font-body`, `--font-mono`) so component code barely changes.
 2. **Retokenize globals around Iris**
-   - Move `src/app/globals.css` toward the design-system aliases:
-     - `--background` / `--card` -> `--paper`
-     - `--muted` / `--sidebar` -> `--paper-3`
-     - `--foreground` -> `--ink-1`
-     - `--muted-foreground` -> `--ink-2` or `--ink-3`
-     - `--border` / `--input` -> `--line`
-     - `--primary` -> Iris `--accent`
-     - `--ring` -> Iris focus color
-   - Add design-system-only helper tokens: `--paper`, `--paper-2`, `--paper-3`, `--ink-1` through `--ink-4`, `--accent-soft`, `--accent-line`, `--accent-ink`, `--ai-surface`, `--ai-line`, `--cite-bg`, `--cite-fg`.
-   - Set the app root to `data-accent="iris"` or hardwire Iris as the default token set. I would hardwire for now; accent switching is not needed yet.
-
+  - Move `src/app/globals.css` toward the design-system aliases:
+    - `--background` / `--card` -> `--paper`
+    - `--muted` / `--sidebar` -> `--paper-3`
+    - `--foreground` -> `--ink-1`
+    - `--muted-foreground` -> `--ink-2` or `--ink-3`
+    - `--border` / `--input` -> `--line`
+    - `--primary` -> Iris `--accent`
+    - `--ring` -> Iris focus color
+  - Add design-system-only helper tokens: `--paper`, `--paper-2`, `--paper-3`, `--ink-1` through `--ink-4`, `--accent-soft`, `--accent-line`, `--accent-ink`, `--ai-surface`, `--ai-line`, `--cite-bg`, `--cite-fg`.
+  - Set the app root to `data-accent="iris"` or hardwire Iris as the default token set. I would hardwire for now; accent switching is not needed yet.
 3. **Normalize primitive styling**
-   - Buttons: primary = iris, secondary = paper + line, ghost = transparent + paper-3 hover.
-   - Badges/pills: add `accent`, `success`, `warning`, and quiet `neutral` variants.
-   - Inputs: focus border/ring should use Iris; placeholder should use `ink-3`.
-   - Cards: reduce default radius toward 10-14px and soften/remove large shadows.
-   - Kbd: create a reusable keyboard hint style instead of repeated one-offs.
-
+  - Buttons: primary = iris, secondary = paper + line, ghost = transparent + paper-3 hover.
+  - Badges/pills: add `accent`, `success`, `warning`, and quiet `neutral` variants.
+  - Inputs: focus border/ring should use Iris; placeholder should use `ink-3`.
+  - Cards: reduce default radius toward 10-14px and soften/remove large shadows.
+  - Kbd: create a reusable keyboard hint style instead of repeated one-offs.
 4. **Reduce one-off saturated colors**
-   - Replace explicit `emerald`, `sky`, `rose`, `violet`, and hard-coded warning styles in Activity with semantic tokens.
-   - Use Iris only for selection, focus, active state, citations, and approved accent moments.
-
+  - Replace explicit `emerald`, `sky`, `rose`, `violet`, and hard-coded warning styles in Activity with semantic tokens.
+  - Use Iris only for selection, focus, active state, citations, and approved accent moments.
 5. **Language polish**
-   - Replace visible `Librarian` labels with user-facing language:
-     - "Advisor memory pass"
-     - "Background memory update"
-     - "Proposed update"
-     - "Source integration"
-   - Keep backend names unchanged for now.
+  - Replace visible `Librarian` labels with user-facing language:
+    - "Advisor memory pass"
+    - "Background memory update"
+    - "Proposed update"
+    - "Source integration"
+  - Keep backend names unchanged for now.
 
 ## Priority 1: Component Refactor
 
@@ -185,29 +181,25 @@ These should stand by until the underlying behavior exists.
 ## Priority 3: Larger Refactor Themes
 
 1. **Token discipline**
-   - Pages should not choose raw colors directly.
-   - Use semantic tokens and component variants.
-   - Audit with `rg "emerald|sky|violet|rose|rounded-2xl|rounded-3xl|shadow-\\[" src`.
-
+  - Pages should not choose raw colors directly.
+  - Use semantic tokens and component variants.
+  - Audit with `rg "emerald|sky|violet|rose|rounded-2xl|rounded-3xl|shadow-\\[" src`.
 2. **Spacing scale**
-   - Adopt the 4pt scale deliberately: 4, 8, 12, 16, 20, 24, 32, 40, 56, 72, 96.
-   - Replace one-off pixel spacing where it changes component rhythm.
-   - Keep dense operational areas practical, especially source lists and file editors.
-
+  - Adopt the 4pt scale deliberately: 4, 8, 12, 16, 20, 24, 32, 40, 56, 72, 96.
+  - Replace one-off pixel spacing where it changes component rhythm.
+  - Keep dense operational areas practical, especially source lists and file editors.
 3. **Radius policy**
-   - House radius: 10px.
-   - Small controls: 6px.
-   - Larger panels/modals: 14px.
-   - Avoid 24-32px pill-like cards unless the element is actually a pill or avatar.
-
+  - House radius: 10px.
+  - Small controls: 6px.
+  - Larger panels/modals: 14px.
+  - Avoid 24-32px pill-like cards unless the element is actually a pill or avatar.
 4. **Layout system**
-   - Standardize split views: list/detail, rail/detail, editor/sidebar.
-   - Avoid nested cards.
-   - Prefer full-height operational layouts over floating dashboard cards.
-
+  - Standardize split views: list/detail, rail/detail, editor/sidebar.
+  - Avoid nested cards.
+  - Prefer full-height operational layouts over floating dashboard cards.
 5. **AI-specific UI contract**
-   - Citations, tool traces, memory drafts, source references, and file edit confirmations should be shared UI patterns, not page-specific markup.
-   - This will keep chat, activity, sources, and overview consistent.
+  - Citations, tool traces, memory drafts, source references, and file edit confirmations should be shared UI patterns, not page-specific markup.
+  - This will keep chat, activity, sources, and overview consistent.
 
 ## Features Not Fully Implemented Yet: Stand By
 
@@ -216,30 +208,23 @@ These design-system ideas depend on product/backend work and should not be treat
 - **Perplexity-style citations in chat**
   - Currently listed in `docs/TODO.md`.
   - Need citation metadata, source locations, and click behavior.
-
 - **Reviewable memory drafts**
   - The design system assumes proposed updates wait for user approval.
   - Current agent/librarian flows can write files; the review queue needs a real data model or use of existing suggestions/run records.
-
 - **Advisor vs Librarian product language**
   - Backend split can remain, but frontend should hide "Librarian".
   - Bigger decision: whether Librarian becomes a true background subagent of Advisor.
-
 - **Project home / pulse**
   - Needs reliable counts, latest source/indexing status, pending review count, and recent activity links.
-
 - **Source previews for PPTX/DOCX/XLSX**
   - Already in `TODO.md`.
   - Requires renderers/previews, open original, download, and possibly source thumbnails.
-
 - **Linked artifacts**
   - Source detail wants links to decisions, files, chats, and memory drafts.
   - Needs relationship data or derived linking.
-
 - **Weekly digest**
   - Appears in the design-system settings idea.
   - Requires email/digest generation and scheduling.
-
 - **Export project memory**
   - Useful settings action, but requires export format and permissions.
 

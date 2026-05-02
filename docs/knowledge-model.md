@@ -171,7 +171,7 @@ The **user’s job** is not to browse every file; it is to trust **Overview + ch
 
 1. **Migration or one-off SQL** to set `pinned = true` for the core set (`PROJECT.md`, `WORK.md`, `PRODUCT.md`, `decisions.md`, `glossary.md` if surfaced) on existing projects.
 2. **Stricter `getDefaultFileVisibility`** (or allowlist) for **new** paths so agent-created files default **internal** unless under approved prefixes.
-3. **Agent / librarian prompt** rules: prefer **append** to existing `topics/`* and `stakeholders/*`; require new top-level paths to be justified in `index.md`.
+3. **Agent / librarian prompt** rules: prefer **append** to existing `topics/`* and `stakeholders/`*; require new top-level paths to be justified in `index.md`.
 4. **Optional:** UI sections that mirror the table in §3.2 so users see **Core / Analyses / Stakeholders / Topics** instead of a flat list.
 
 ---
@@ -182,4 +182,3 @@ The **user’s job** is not to browse every file; it is to trust **Overview + ch
 - `docs/V1 PLAN.md` — `project_files` vs `source_materials`, tool model  
 - `docs/MEMORY MODEL.md` — older harness-oriented notes (SQLite / hooks); **synthesis in this repo is Supabase `project_files` + sources**  
 - `docs/TODO.md` — wiki division, librarian visibility, naming (“Artifacts”)
-

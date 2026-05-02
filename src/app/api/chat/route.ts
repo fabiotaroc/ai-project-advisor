@@ -277,7 +277,7 @@ export async function POST(request: Request) {
         };
       }
     },
-    onFinish: async ({ messages, isAborted }) => {
+    onFinish: async ({ messages, isAborted, finishReason }) => {
       if (isAborted) {
         return;
       }
@@ -286,6 +286,16 @@ export async function POST(request: Request) {
         await replaceConversationMessages(conversation.id, messages);
       } catch (error) {
         console.error("Failed to persist conversation history", error);
+      }
+
+      // Each /api/chat POST ends with onFinish. When the step finished on tool
+      // calls, the client (sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls)
+      // will send a follow-up request to continue the same user turn. Only run
+      // the Librarian on the final step of the turn — when the model stopped
+      // for a real reason ("stop" / "length" / "content-filter") and not
+      // because it emitted tool calls awaiting results.
+      if (finishReason === "tool-calls") {
+        return;
       }
 
       after(async () => {

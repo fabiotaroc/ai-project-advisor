@@ -1,16 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSelectedLayoutSegment, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   Activity,
   BookOpen,
+  ChevronRight,
   ChevronsUpDown,
   House,
   Library,
   Loader2,
-  LogOut,
   MessageSquare,
   PanelLeft,
   Plus,
@@ -51,16 +52,7 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { formatChatListTime } from "@/lib/date-format";
 import type { ProjectConversationListItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -85,21 +77,58 @@ function getConversationInitial(title: string) {
   return trimmed[0].toUpperCase();
 }
 
-function getAccountInitial(email: string | null) {
-  const trimmed = email?.trim();
-  if (!trimmed) return "?";
-  return trimmed[0].toUpperCase();
+function getAccountInitial({
+  firstName,
+  lastName,
+  email,
+}: {
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+}) {
+  const candidates = [firstName, lastName]
+    .map((value) => value?.trim() ?? "")
+    .filter((value) => value.length > 0);
+  if (candidates.length > 0) {
+    return candidates
+      .slice(0, 2)
+      .map((value) => value[0]?.toUpperCase() ?? "")
+      .join("");
+  }
+  const trimmedEmail = email?.trim();
+  if (!trimmedEmail) return "?";
+  return trimmedEmail[0].toUpperCase();
+}
+
+function getAccountDisplayName({
+  firstName,
+  lastName,
+}: {
+  firstName: string | null;
+  lastName: string | null;
+}) {
+  const combined = [firstName, lastName]
+    .map((value) => value?.trim() ?? "")
+    .filter((value) => value.length > 0)
+    .join(" ");
+  return combined.length > 0 ? combined : "Account";
 }
 
 export function ProjectSidebar({
   projectId,
   projectName,
   userEmail,
+  userFirstName = null,
+  userLastName = null,
+  userAvatarUrl = null,
   conversations = [],
 }: {
   projectId: string;
   projectName: string;
   userEmail: string | null;
+  userFirstName?: string | null;
+  userLastName?: string | null;
+  userAvatarUrl?: string | null;
   conversations?: ConversationSummary[];
 }) {
   const router = useRouter();
@@ -528,7 +557,7 @@ export function ProjectSidebar({
                 tooltip="Project settings"
                 size="lg"
                 className={cn(
-                  "h-14 rounded-none px-1.5 py-2 hover:bg-sidebar-accent group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:rounded-md group-data-[collapsible=icon]:p-2",
+                  "h-14 rounded-md px-1.5 py-2 hover:bg-sidebar-accent group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:rounded-md group-data-[collapsible=icon]:p-2",
                   segment === "settings" &&
                     "bg-sidebar-accent text-sidebar-accent-foreground",
                 )}
@@ -550,58 +579,45 @@ export function ProjectSidebar({
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <SidebarMenuButton
-                    tooltip="Account"
-                    size="lg"
-                    className="h-11 rounded-md px-1.5 py-2 hover:bg-sidebar-accent group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-2"
-                  >
-                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full border border-sidebar-border bg-background font-mono text-xs font-medium text-sidebar-foreground group-data-[collapsible=icon]:size-4 group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-transparent">
-                      {getAccountInitial(userEmail)}
+              <SidebarMenuButton
+                asChild
+                tooltip="Account settings"
+                size="lg"
+                className="h-11 rounded-md px-1.5 py-2 hover:bg-sidebar-accent group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-2"
+              >
+                <Link href="/account">
+                  <span className="relative flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-sidebar-border bg-background font-mono text-xs font-medium text-sidebar-foreground group-data-[collapsible=icon]:size-4 group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-transparent">
+                    {userAvatarUrl ? (
+                      <Image
+                        src={userAvatarUrl}
+                        alt=""
+                        fill
+                        sizes="28px"
+                        className="object-cover"
+                        unoptimized
+                      />
+                    ) : (
+                      getAccountInitial({
+                        firstName: userFirstName,
+                        lastName: userLastName,
+                        email: userEmail,
+                      })
+                    )}
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5 pl-1 text-left group-data-[collapsible=icon]:hidden">
+                    <span className="truncate text-sm font-medium leading-none text-sidebar-foreground">
+                      {getAccountDisplayName({
+                        firstName: userFirstName,
+                        lastName: userLastName,
+                      })}
                     </span>
-                    <span className="flex min-w-0 flex-1 flex-col gap-0.5 pl-1 text-left group-data-[collapsible=icon]:hidden">
-                      <span className="truncate text-sm font-medium leading-none text-sidebar-foreground">
-                        Account
-                      </span>
-                      <span className="truncate text-[12px] leading-none text-muted-foreground">
-                        {userEmail ?? "Signed in"}
-                      </span>
-                    </span>
-                    <ChevronsUpDown className="ml-auto size-4 shrink-0 text-muted-foreground group-data-[collapsible=icon]:hidden" />
-                  </SidebarMenuButton>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  side="right"
-                  align="end"
-                  sideOffset={10}
-                  className="w-64"
-                >
-                  <DropdownMenuLabel className="space-y-1">
-                    <span className="block text-xs font-medium text-foreground">Morgan</span>
-                    <span className="block truncate font-mono text-[11px] font-normal text-muted-foreground">
+                    <span className="truncate text-[12px] leading-none text-muted-foreground">
                       {userEmail ?? "Signed in"}
                     </span>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <div className="p-1">
-                    <ThemeToggle
-                      variant="ghost"
-                      showLabel
-                      className="h-8 w-full justify-start px-2"
-                    />
-                  </div>
-                  <DropdownMenuSeparator />
-                  <form action="/auth/signout" method="post">
-                    <DropdownMenuItem asChild variant="destructive">
-                      <button type="submit" className="w-full">
-                        <LogOut />
-                        Sign out
-                      </button>
-                    </DropdownMenuItem>
-                  </form>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  </span>
+                  <ChevronRight className="ml-auto size-4 shrink-0 text-muted-foreground group-data-[collapsible=icon]:hidden" />
+                </Link>
+              </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>

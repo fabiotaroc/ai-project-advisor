@@ -6,20 +6,13 @@ import {
   lastAssistantMessageIsCompleteWithToolCalls,
   type UIMessage,
 } from "ai";
-import type { LucideIcon } from "lucide-react";
 import {
-  Brain,
-  BookOpen,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   FilePenLine,
-  FileText,
-  FolderTree,
   MessageSquareQuote,
-  Search,
   SendHorizontal,
-  Wrench,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -42,17 +35,8 @@ import {
   getCitationFromHref,
   getCitationMetadataFromMessageLike,
   renderCitationMarkersAsMarkdownLinks,
-  type ChatMessageMetadata,
   type CitationItem,
 } from "@/lib/chat-citations";
-
-const CONTEXT_WINDOW_TOKENS = 1_000_000;
-
-function formatTokens(value: number) {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
-  return `${value}`;
-}
 
 const SUGGESTED_PROMPTS = [
   "Summarize the current project direction and any open risks.",
@@ -61,15 +45,13 @@ const SUGGESTED_PROMPTS = [
   "Compare what PROJECT.md says against the source material.",
 ];
 
-const TOOL_META: Record<string, { label: string; icon: LucideIcon }> = {
-  list_files: { label: "Listing project files", icon: FolderTree },
-  read_file: { label: "Reading a file", icon: FileText },
-  edit_file: { label: "Updating a project file", icon: FilePenLine },
-  search_sources: { label: "Searching source material", icon: Search },
-  read_source: { label: "Opening a source", icon: BookOpen },
-};
-
-const TOOL_SUMMARY_SKIP = new Set(["projectId", "sourceMaterialId"]);
+const THINKING_PHRASES = [
+  "Thinking...",
+  "Pondering...",
+  "Analyzing...",
+  "Reviewing...",
+  "Reasoning...",
+];
 
 function truncate(value: string, length = 64) {
   return value.length > length ? `${value.slice(0, length - 1)}...` : value;
@@ -83,52 +65,75 @@ function humanizeToolName(toolName: string) {
     .trim();
 }
 
-function stringifyValue(value: unknown) {
-  if (typeof value === "string") return value;
-
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
 function getStringProperty(value: unknown, key: string) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return "";
   const property = (value as Record<string, unknown>)[key];
   return typeof property === "string" ? property.trim() : "";
 }
 
-function summarizeToolInput(input: Record<string, unknown> | undefined) {
-  if (!input) return "";
-  if (typeof input.path === "string") return truncate(input.path, 54);
-  if (typeof input.query === "string") return `Query: ${truncate(input.query, 44)}`;
-  if (typeof input.sourceMaterialId === "string") return "Specific source";
-  if ("content" in input) return "Includes drafted content";
-
-  const summary = Object.entries(input)
-    .filter(([key, value]) => {
-      if (TOOL_SUMMARY_SKIP.has(key)) return false;
-      if (value === undefined || value === null || value === "" || value === false) return false;
-      return true;
-    })
-    .map(([key, value]) => {
-      if (typeof value === "boolean") return key;
-      if (typeof value === "string") return truncate(value, 30);
-      return key;
-    })
-    .join(" · ");
-
-  return truncate(summary, 68);
+function getBooleanProperty(value: unknown, key: string) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const property = (value as Record<string, unknown>)[key];
+  return property === true;
 }
 
-function summarizeToolPart(toolName: string, input: Record<string, unknown> | undefined, output: unknown) {
-  if (toolName === "read_source") {
-    const title = getStringProperty(output, "title");
-    if (title) return truncate(title, 54);
-  }
+/**
+ * Single source of truth for how each timeline row reads. Returns a
+ * tense-aware verb phrase that shifts as the part transitions through
+ * input-streaming → input-available → output-available / output-error.
+ */
+function describeToolRow(
+  toolName: string,
+  state: string | undefined,
+  input: Record<string, unknown>,
+  output: unknown
+): { label: string; isError: boolean; isRunning: boolean } {
+  const running = isRunningToolState(state);
+  const failed = state === "output-error";
+  const path = getStringProperty(input, "path");
+  const query = getStringProperty(input, "query");
+  const created = getBooleanProperty(output, "created");
+  const sourceTitle = getStringProperty(output, "title");
+  const hits = Array.isArray(output) ? output.length : null;
 
-  return summarizeToolInput(input);
+  const make = (label: string) => ({ label, isError: failed, isRunning: running });
+
+  switch (toolName) {
+    case "list_files":
+      if (failed) return make("Couldn't list project files");
+      return make(running ? "Listing project files..." : "Listed project files");
+    case "read_file": {
+      const target = truncate(path || "file", 48);
+      if (failed) return make(`Couldn't read ${target}`);
+      return make(running ? `Reading ${target}...` : `Read ${target}`);
+    }
+    case "edit_file": {
+      const target = truncate(path || "file", 48);
+      if (failed) return make(`Couldn't update ${target}`);
+      if (running) return make(`Updating ${target}...`);
+      return make(created ? `Created ${target}` : `Updated ${target}`);
+    }
+    case "search_sources": {
+      const q = query ? `'${truncate(query, 40)}'` : "sources";
+      if (failed) return make(`Couldn't search ${q}`);
+      if (running) return make(`Searching ${q}...`);
+      const suffix = hits != null ? ` (${hits} ${hits === 1 ? "hit" : "hits"})` : "";
+      return make(`Searched ${q}${suffix}`);
+    }
+    case "read_source": {
+      const label = sourceTitle ? `'${truncate(sourceTitle, 48)}'` : "source";
+      if (failed) return make("Couldn't open source");
+      return make(running ? "Opening source..." : `Read ${label}`);
+    }
+    case "trigger_wiki_lint":
+      if (failed) return make("Couldn't start Morgan pass");
+      return make(running ? "Starting Morgan pass..." : "Started Morgan pass");
+    default: {
+      const friendly = humanizeToolName(toolName) || "tool";
+      if (failed) return make(`${friendly} failed`);
+      return make(running ? `Running ${friendly}...` : `Ran ${friendly}`);
+    }
+  }
 }
 
 function getMessageText(message: UIMessage) {
@@ -196,13 +201,6 @@ function StreamingDots() {
   );
 }
 
-function formatListSummary(parts: string[]) {
-  if (parts.length === 0) return "Tool activity";
-  if (parts.length === 1) return parts[0];
-  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
-  return `${parts.slice(0, -1).join(", ")}, and ${parts.at(-1)}`;
-}
-
 function toCitationRailItem(citation: CitationItem): CitationRailItem {
   return {
     ...citation,
@@ -247,172 +245,186 @@ function CitationPill({
   );
 }
 
-function ToolTrace({ part }: { part: ToolPartInfo }) {
-  const toolName = (part.toolName ?? part.type.replace(/^tool-/, "")) || "tool";
-  const meta = TOOL_META[toolName] ?? { label: humanizeToolName(toolName), icon: Wrench };
-  const Icon = meta.icon;
-  const state = part.state ?? "running";
-  const input = part.input ?? {};
-  const output = part.output;
-  const summary = summarizeToolPart(toolName, input, output);
-  const isRunning = isRunningToolState(state);
-  const hasError = state === "output-error";
-  const hasOutput = state === "output-available";
+type TimelineState = "running" | "done" | "error";
 
-  const [open, setOpen] = useState(false);
-
+/**
+ * One row in the trace timeline. A small bullet on the left, a thin
+ * connector line down to the next row when there is one, and the row's
+ * content rendered to the right. Bullet color/animation reflects state.
+ */
+function TimelineRow({
+  state,
+  showConnector,
+  children,
+}: {
+  state: TimelineState;
+  showConnector: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex flex-col font-mono">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        className="group flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:bg-card/75 hover:text-foreground"
-      >
-        <Icon className="size-3 shrink-0 opacity-70" />
-        <span className="text-foreground/75">{toolName}</span>
-        {summary ? (
-          <span className="min-w-0 truncate text-muted-foreground/80">· {summary}</span>
-        ) : (
-          <span className="min-w-0 truncate text-muted-foreground/75">· {meta.label}</span>
-        )}
-        {isRunning ? <StreamingDots /> : null}
-        <ChevronDown
-          className={cn(
-            "ml-auto size-3 shrink-0 opacity-35 transition-all group-hover:opacity-70",
-            open && "rotate-180 opacity-70"
-          )}
+    <div className="relative flex items-start text-[11px] font-mono text-muted-foreground">
+      {showConnector ? (
+        <span
+          aria-hidden
+          className="absolute left-[2.5px] top-[14px] h-[calc(100%+10px)] w-px bg-ai-line"
         />
-      </button>
-      {open ? (
-        <div className="ml-3 mt-1 flex flex-col gap-2 border-l border-ai-line/80 pl-3">
-          {Object.keys(input).length > 0 ? (
-            <pre className="max-h-44 overflow-auto rounded-md border border-border/60 bg-card/75 px-2 py-1.5 text-[11px] whitespace-pre-wrap text-foreground/75">
-              {stringifyValue(input)}
-            </pre>
-          ) : null}
-          {hasOutput && output !== undefined ? (
-            <pre className="max-h-44 overflow-auto rounded-md border border-border/60 bg-card/75 px-2 py-1.5 text-[11px] whitespace-pre-wrap text-foreground/75">
-              {stringifyValue(output)}
-            </pre>
-          ) : null}
-          {hasError ? (
-            <p className="text-[11px] text-destructive">{part.errorText ?? "The tool call failed."}</p>
-          ) : null}
-        </div>
       ) : null}
+      <span
+        aria-hidden
+        className={cn(
+          "mt-[5px] size-1.5 shrink-0 rounded-full",
+          // Active step: solid blue dot with a soft pulsing halo so the eye
+          // immediately lands on what the model is doing right now.
+          state === "running" &&
+            "animate-pulse bg-blue-500 shadow-[0_0_0_3px_rgba(59,130,246,0.18),0_0_8px_2px_rgba(59,130,246,0.55)]",
+          state === "done" && "bg-accent-line",
+          state === "error" && "bg-destructive/70"
+        )}
+      />
+      <div className="ml-2 min-w-0 flex-1">{children}</div>
     </div>
   );
 }
 
-function ReasoningBlock({
+function ToolRow({
+  part,
+  showConnector,
+}: {
+  part: ToolPartInfo;
+  showConnector: boolean;
+}) {
+  const toolName = getToolName(part);
+  const { label, isError, isRunning } = describeToolRow(
+    toolName,
+    part.state,
+    part.input ?? {},
+    part.output
+  );
+  const state: TimelineState = isError ? "error" : isRunning ? "running" : "done";
+  return (
+    <TimelineRow state={state} showConnector={showConnector}>
+      <span className={cn(isError ? "text-destructive/85" : "text-foreground/80")}>
+        {label}
+      </span>
+      {isError && part.errorText ? (
+        <span className="ml-2 truncate text-muted-foreground/70">· {part.errorText}</span>
+      ) : null}
+    </TimelineRow>
+  );
+}
+
+/**
+ * Reasoning row: cycles thinking phrases while live, collapses to a
+ * "Thought process" disclosure once the part finishes streaming. The body
+ * is rendered as muted prose (not raw `<pre>`) so it doesn't shout.
+ */
+function ReasoningRow({
   text,
   isStreaming,
+  showConnector,
 }: {
   text: string;
   isStreaming: boolean;
+  showConnector: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [phraseIdx, setPhraseIdx] = useState(0);
+
+  useEffect(() => {
+    if (!isStreaming) return;
+    const id = setInterval(() => {
+      setPhraseIdx((i) => (i + 1) % THINKING_PHRASES.length);
+    }, 2000);
+    return () => clearInterval(id);
+  }, [isStreaming]);
+
+  const showContent = (open || isStreaming) && text.length > 0;
+  const state: TimelineState = isStreaming ? "running" : "done";
 
   return (
-    <div className="flex flex-col font-mono">
+    <TimelineRow state={state} showConnector={showConnector}>
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
-        className="group flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:bg-card/75 hover:text-foreground"
+        onClick={() => !isStreaming && setOpen((v) => !v)}
+        disabled={isStreaming}
+        className={cn(
+          "inline-flex items-center gap-1 text-left text-foreground/80 transition-colors",
+          !isStreaming && "hover:text-foreground"
+        )}
       >
-        <Brain className="size-3 shrink-0 opacity-70" />
-        <span className="text-foreground/75">{isStreaming ? "thinking" : "thought"}</span>
-        {isStreaming ? (
-          <StreamingDots />
+        <span>{isStreaming ? THINKING_PHRASES[phraseIdx] : "Thought process"}</span>
+        {!isStreaming ? (
+          <ChevronDown
+            className={cn(
+              "size-3 opacity-50 transition-transform",
+              open ? "rotate-0" : "-rotate-90"
+            )}
+          />
         ) : null}
-        <ChevronDown
-          className={cn(
-            "ml-auto size-3 shrink-0 opacity-35 transition-all group-hover:opacity-70",
-            open && "rotate-180 opacity-70"
-          )}
-        />
       </button>
-      {open ? (
-        <pre className="ml-3 mt-1 max-h-56 overflow-auto border-l border-ai-line/80 pl-3 text-[11px] leading-5 whitespace-pre-wrap text-foreground/75">
+      {showContent ? (
+        <div className="mt-1.5 max-h-56 overflow-auto whitespace-pre-wrap text-[11px] leading-5 text-muted-foreground/80">
           {text}
-        </pre>
-      ) : null}
-    </div>
-  );
-}
-
-function getTraceSummary(traceParts: TracePart[], citations: CitationRailItem[]) {
-  const toolParts = traceParts.flatMap((item) => (item.kind === "tool" ? [item.part] : []));
-  const sourceReads = toolParts.filter((part) => getToolName(part) === "read_source").length;
-  const sourceCount = sourceReads || citations.length;
-  const memoryReads = toolParts.filter((part) => getToolName(part) === "read_file").length;
-  const fileLists = toolParts.filter((part) => getToolName(part) === "list_files").length;
-  const searches = toolParts.filter((part) => getToolName(part) === "search_sources").length;
-  const memoryUpdates = toolParts.filter((part) => getToolName(part) === "edit_file").length;
-  const lintRuns = toolParts.filter((part) => getToolName(part) === "trigger_wiki_lint").length;
-
-  const summaryParts = [
-    sourceCount > 0 ? `${sourceCount} ${sourceCount === 1 ? "source" : "sources"} ${sourceReads ? "read" : "found"}` : "",
-    memoryReads > 0 ? `${memoryReads} ${memoryReads === 1 ? "memory" : "memories"} read` : "",
-    searches > 0 && sourceReads === 0 ? `${searches} ${searches === 1 ? "search" : "searches"}` : "",
-    fileLists > 0 ? `${fileLists} file ${fileLists === 1 ? "list" : "lists"}` : "",
-    memoryUpdates > 0 ? `${memoryUpdates} memory ${memoryUpdates === 1 ? "update" : "updates"}` : "",
-    lintRuns > 0 ? `${lintRuns} Morgan ${lintRuns === 1 ? "pass" : "passes"}` : "",
-  ].filter(Boolean);
-
-  return formatListSummary(summaryParts);
-}
-
-function ToolTraceGroup({
-  traceParts,
-  citations,
-}: {
-  traceParts: TracePart[];
-  citations: CitationRailItem[];
-}) {
-  const [open, setOpen] = useState(false);
-  const isRunning = traceParts.some((item) =>
-    item.kind === "reasoning" ? item.isStreaming : isRunningToolState(item.part.state)
-  );
-
-  if (traceParts.length === 0) return null;
-
-  return (
-    <div className="flex flex-col rounded-lg border border-border/70 bg-card/65 font-mono shadow-[var(--shadow-1)]">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        className="group flex min-h-9 w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-muted-foreground transition-colors hover:bg-muted/45 hover:text-foreground"
-      >
-        {isRunning ? <StreamingDots /> : null}
-        <span className="min-w-0 flex-1 truncate text-foreground/75">
-          {getTraceSummary(traceParts, citations)}
-        </span>
-        <span className="text-muted-foreground/70">
-          {traceParts.length} {traceParts.length === 1 ? "item" : "items"}
-        </span>
-        <ChevronDown
-          className={cn(
-            "size-3 shrink-0 opacity-45 transition-transform group-hover:opacity-75",
-            open && "rotate-180"
-          )}
-        />
-      </button>
-      {open ? (
-        <div className="border-t border-border/70 px-2 py-2">
-          {traceParts.map((item) =>
-            item.kind === "reasoning" ? (
-              <ReasoningBlock
-                key={item.key}
-                text={item.text}
-                isStreaming={item.isStreaming}
-              />
-            ) : (
-              <ToolTrace key={item.key} part={item.part} />
-            )
-          )}
         </div>
       ) : null}
+    </TimelineRow>
+  );
+}
+
+/**
+ * Collapsible "Working… / Completed in N steps" wrapper around a trace
+ * timeline. Auto-collapses once `shouldMinimize` flips true (i.e. text has
+ * streamed in below it). Uses a latch so the end-of-stream re-render
+ * doesn't pop it back open. Manual user toggle overrides the auto behavior.
+ *
+ * Adapted from `mike/frontend/src/app/components/shared/PreResponseWrapper.tsx`.
+ */
+function PreResponseWrapper({
+  children,
+  stepCount,
+  shouldMinimize,
+  isStreaming,
+}: {
+  children: React.ReactNode;
+  stepCount: number;
+  shouldMinimize: boolean;
+  isStreaming: boolean;
+}) {
+  // Once the wrapper has *ever* been asked to minimize (i.e. text streamed
+  // in below), latch that so a later render where shouldMinimize flips back
+  // to false (e.g. end-of-stream reconcile) doesn't pop the wrapper open.
+  // The official React pattern for "store information from previous renders"
+  // is a guarded setState during render, which doesn't trigger an extra
+  // commit and is preferred over ref-mutation under the new react-hooks rules.
+  const [hasMinimized, setHasMinimized] = useState(false);
+  if (shouldMinimize && !hasMinimized) setHasMinimized(true);
+
+  // `userOpen` is the explicit user override; null means "follow auto".
+  // Deriving `isOpen` during render avoids a setState-in-effect cascade.
+  const [userOpen, setUserOpen] = useState<boolean | null>(null);
+  const autoOpen = !shouldMinimize && !hasMinimized;
+  const isOpen = userOpen ?? autoOpen;
+
+  const stepWord = stepCount === 1 ? "step" : "steps";
+  const label = isStreaming ? "Working" : `Completed in ${stepCount} ${stepWord}`;
+
+  return (
+    <div className="flex flex-col">
+      <button
+        type="button"
+        onClick={() => setUserOpen(!isOpen)}
+        className="inline-flex w-fit items-center gap-1.5 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <span className="truncate">{label}</span>
+        {isStreaming ? <StreamingDots /> : null}
+        <ChevronDown
+          className={cn(
+            "size-3 shrink-0 opacity-60 transition-transform",
+            isOpen ? "rotate-0" : "-rotate-90"
+          )}
+        />
+      </button>
+      {isOpen ? <div className="mt-2.5 flex flex-col gap-2.5 pl-px">{children}</div> : null}
     </div>
   );
 }
@@ -466,7 +478,7 @@ function getStreamingStatus(messages: UIMessage[], status: string) {
   return "Reading project context...";
 }
 
-function buildRailData(messages: UIMessage[], lastUsage: ChatMessageMetadata["usage"] | undefined, contextPercent: number) {
+function buildRailData(messages: UIMessage[]) {
   const toolParts = extractToolParts(messages);
   const citationMap = new Map<string, CitationRailItem>();
   const memoryMap = new Map<string, MemoryDraftItem>();
@@ -502,13 +514,6 @@ function buildRailData(messages: UIMessage[], lastUsage: ChatMessageMetadata["us
     { label: "Sources referenced", value: `${citationMap.size}` },
     { label: "Memory updates", value: `${memoryMap.size}` },
   ];
-
-  if (lastUsage?.inputTokens) {
-    facts.push({
-      label: "Context",
-      value: `${formatTokens(lastUsage.inputTokens)} tokens · ${contextPercent.toFixed(0)}%`,
-    });
-  }
 
   return {
     citations: Array.from(citationMap.values()),
@@ -672,6 +677,82 @@ function ChatRail({
   );
 }
 
+/** Markdown body for a single text part. Extracted so it can sit between
+ *  trace groups during interleaved rendering. */
+function AssistantTextPart({
+  text,
+  citationMetadata,
+  projectId,
+  onCitationHighlight,
+}: {
+  text: string;
+  citationMetadata: ReturnType<typeof getCitationMetadataFromMessageLike>;
+  projectId: string;
+  onCitationHighlight?: (citationKey: string | null) => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "text-sm text-foreground/95",
+        "[&_p]:whitespace-pre-wrap [&_p]:leading-7",
+        "[&_p:not(:first-child)]:mt-3",
+        "[&_strong]:font-semibold",
+        "[&_em]:italic",
+        "[&_h1]:mt-5 [&_h1]:text-lg [&_h1]:font-semibold [&_h1]:tracking-tight",
+        "[&_h2]:mt-4 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:tracking-tight",
+        "[&_h3]:mt-4 [&_h3]:text-sm [&_h3]:font-semibold",
+        "[&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6",
+        "[&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-6",
+        "[&_li]:mt-1 [&_li>p]:whitespace-normal",
+        "[&_a]:font-medium [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-4",
+        "[&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-border/70 [&_blockquote]:pl-4 [&_blockquote]:text-muted-foreground",
+        "[&_hr]:my-4 [&_hr]:border-border/70",
+        "[&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_table]:overflow-hidden [&_table]:rounded-lg",
+        "[&_th]:border-b [&_th]:border-border/70 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium",
+        "[&_td]:border-b [&_td]:border-border/40 [&_td]:px-3 [&_td]:py-2 [&_td]:align-top",
+        "[&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-border/70 [&_pre]:bg-muted/45 [&_pre]:px-4 [&_pre]:py-3",
+        "[&_code]:rounded-md [&_code]:bg-muted/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.9em]",
+        "[&_pre_code]:bg-transparent [&_pre_code]:p-0"
+      )}
+    >
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        urlTransform={(url) =>
+          url.startsWith(CITATION_LINK_PREFIX) ? url : defaultUrlTransform(url)
+        }
+        components={{
+          a: ({ node, ...props }) => {
+            void node;
+            const href = typeof props.href === "string" ? props.href : undefined;
+            const citationRef = getCitationFromHref(href, citationMetadata);
+            if (citationRef?.citation) {
+              return (
+                <CitationPill
+                  citation={toCitationRailItem(citationRef.citation)}
+                  index={citationRef.index}
+                  projectId={projectId}
+                  onRailHighlight={onCitationHighlight}
+                />
+              );
+            }
+            return <a {...props} rel="noreferrer" target="_blank" />;
+          },
+          p: ({ node, children, ...props }) => {
+            void node;
+            return <p {...props}>{children}</p>;
+          },
+        }}
+      >
+        {renderCitationMarkersAsMarkdownLinks(text, citationMetadata)}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
+type AssistantGroup =
+  | { kind: "trace"; key: string; items: TracePart[] }
+  | { kind: "text"; key: string; text: string };
+
 function AssistantMessage({
   message,
   isStreaming,
@@ -684,101 +765,144 @@ function AssistantMessage({
   onCitationHighlight?: (citationKey: string | null) => void;
 }) {
   const citationMetadata = getCitationMetadataFromMessageLike(message);
-  const citations = getMessageCitations(message);
-  const traceParts: TracePart[] = [];
+
+  // Walk parts once and bucket consecutive trace items together. Each text
+  // part flushes the current bucket and emits its own group, so prose ends
+  // up between trace blocks rather than below a single fat trace card.
+  const groups: AssistantGroup[] = [];
+  let currentTrace: Extract<AssistantGroup, { kind: "trace" }> | null = null;
+  const lastIndex = message.parts.length - 1;
 
   for (const [index, part] of message.parts.entries()) {
+    if (part.type === "text" && part.text) {
+      if (currentTrace) {
+        groups.push(currentTrace);
+        currentTrace = null;
+      }
+      groups.push({
+        kind: "text",
+        key: `${message.id}-text-${index}`,
+        text: part.text,
+      });
+      continue;
+    }
+
     if (isReasoningPart(part)) {
       const text = (part.text ?? "").trim();
-      if (text) {
-        traceParts.push({
-          kind: "reasoning",
-          key: `${message.id}-reasoning-${index}`,
-          text,
-          isStreaming: isStreaming && index === message.parts.length - 1,
-        });
+      if (!text) continue;
+      if (!currentTrace) {
+        currentTrace = {
+          kind: "trace",
+          key: `${message.id}-trace-${index}`,
+          items: [],
+        };
       }
+      currentTrace.items.push({
+        kind: "reasoning",
+        key: `${message.id}-reasoning-${index}`,
+        text,
+        isStreaming: isStreaming && index === lastIndex,
+      });
+      continue;
     }
 
     if (isToolPart(part)) {
       const toolPart = part as ToolPartInfo;
-      traceParts.push({
+      if (!currentTrace) {
+        currentTrace = {
+          kind: "trace",
+          key: `${message.id}-trace-${index}`,
+          items: [],
+        };
+      }
+      currentTrace.items.push({
         kind: "tool",
         key: toolPart.toolCallId ?? `${message.id}-tool-${index}`,
         part: toolPart,
       });
     }
   }
-
-  const textNodes = message.parts.map((part, index) => {
-    if (part.type === "text" && part.text) {
-      return (
-        <div
-          key={`${message.id}-text-${index}`}
-          className={cn(
-            "text-sm text-foreground/95",
-            "[&_p]:whitespace-pre-wrap [&_p]:leading-7",
-            "[&_p:not(:first-child)]:mt-3",
-            "[&_strong]:font-semibold",
-            "[&_em]:italic",
-            "[&_h1]:mt-5 [&_h1]:text-lg [&_h1]:font-semibold [&_h1]:tracking-tight",
-            "[&_h2]:mt-4 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:tracking-tight",
-            "[&_h3]:mt-4 [&_h3]:text-sm [&_h3]:font-semibold",
-            "[&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6",
-            "[&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-6",
-            "[&_li]:mt-1 [&_li>p]:whitespace-normal",
-            "[&_a]:font-medium [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-4",
-            "[&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-border/70 [&_blockquote]:pl-4 [&_blockquote]:text-muted-foreground",
-            "[&_hr]:my-4 [&_hr]:border-border/70",
-            "[&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_table]:overflow-hidden [&_table]:rounded-lg",
-            "[&_th]:border-b [&_th]:border-border/70 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium",
-            "[&_td]:border-b [&_td]:border-border/40 [&_td]:px-3 [&_td]:py-2 [&_td]:align-top",
-            "[&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-border/70 [&_pre]:bg-muted/45 [&_pre]:px-4 [&_pre]:py-3",
-            "[&_code]:rounded-md [&_code]:bg-muted/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.9em]",
-            "[&_pre_code]:bg-transparent [&_pre_code]:p-0"
-          )}
-        >
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            urlTransform={(url) =>
-              url.startsWith(CITATION_LINK_PREFIX) ? url : defaultUrlTransform(url)
-            }
-            components={{
-              a: ({ node, ...props }) => {
-                void node;
-                const href = typeof props.href === "string" ? props.href : undefined;
-                const citationRef = getCitationFromHref(href, citationMetadata);
-                if (citationRef?.citation) {
-                  return (
-                    <CitationPill
-                      citation={toCitationRailItem(citationRef.citation)}
-                      index={citationRef.index}
-                      projectId={projectId}
-                      onRailHighlight={onCitationHighlight}
-                    />
-                  );
-                }
-                return <a {...props} rel="noreferrer" target="_blank" />;
-              },
-              p: ({ node, children, ...props }) => {
-                void node;
-                return <p {...props}>{children}</p>;
-              },
-            }}
-          >
-            {renderCitationMarkersAsMarkdownLinks(part.text, citationMetadata)}
-          </ReactMarkdown>
-        </div>
-      );
-    }
-
-    return null;
-  });
+  if (currentTrace) groups.push(currentTrace);
 
   return (
-    <div className="flex flex-col gap-2.5">
-      <ToolTraceGroup traceParts={traceParts} citations={citations} />
-      {textNodes}
+    <div className="flex flex-col gap-3">
+      {groups.map((group, groupIdx) => {
+        if (group.kind === "text") {
+          return (
+            <AssistantTextPart
+              key={group.key}
+              text={group.text}
+              citationMetadata={citationMetadata}
+              projectId={projectId}
+              onCitationHighlight={onCitationHighlight}
+            />
+          );
+        }
+
+        if (group.items.length === 0) return null;
+
+        // Auto-collapse this trace once any later group emits prose. The
+        // PreResponseWrapper latches the minimized state internally.
+        const hasTextAfter = groups
+          .slice(groupIdx + 1)
+          .some((g) => g.kind === "text");
+        const groupIsStreaming = group.items.some((item) =>
+          item.kind === "reasoning"
+            ? item.isStreaming
+            : isRunningToolState(item.part.state)
+        );
+
+        return (
+          <PreResponseWrapper
+            key={group.key}
+            stepCount={group.items.length}
+            shouldMinimize={hasTextAfter}
+            isStreaming={groupIsStreaming}
+          >
+            {group.items.map((item, i) => {
+              const showConnector = i < group.items.length - 1;
+              if (item.kind === "reasoning") {
+                return (
+                  <ReasoningRow
+                    key={item.key}
+                    text={item.text}
+                    isStreaming={item.isStreaming}
+                    showConnector={showConnector}
+                  />
+                );
+              }
+              return (
+                <ToolRow
+                  key={item.key}
+                  part={item.part}
+                  showConnector={showConnector}
+                />
+              );
+            })}
+          </PreResponseWrapper>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Synthetic assistant card that fills the gap between "user pressed send"
+ * and the first reasoning/tool/text part arriving from the stream. Reuses
+ * the same outer shell as a real assistant message so React doesn't have
+ * to swap layouts mid-stream — the wrapper visually carries forward into
+ * the real `AssistantMessage`'s first `PreResponseWrapper`.
+ */
+function PendingAssistantCard({ status }: { status: string }) {
+  return (
+    <div className="flex justify-start">
+      <div className="w-full max-w-[52rem]">
+        <PreResponseWrapper stepCount={0} shouldMinimize={false} isStreaming>
+          <TimelineRow state="running" showConnector={false}>
+            <span className="text-foreground/80">{status}</span>
+          </TimelineRow>
+        </PreResponseWrapper>
+      </div>
     </div>
   );
 }
@@ -862,23 +986,9 @@ export function ChatPanel({
 
   const isBusy = status === "submitted" || status === "streaming";
 
-  const lastUsage = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const message = messages[i];
-      if (message.role !== "assistant") continue;
-      const usage = (message.metadata as ChatMessageMetadata | undefined)?.usage;
-      if (usage?.totalTokens || usage?.inputTokens) return usage;
-    }
-    return undefined;
-  }, [messages]);
-
-  const contextTokens = lastUsage?.inputTokens ?? 0;
-  const contextPercent = contextTokens
-    ? Math.min(100, (contextTokens / CONTEXT_WINDOW_TOKENS) * 100)
-    : 0;
   const railData = useMemo(
-    () => buildRailData(messages, lastUsage, contextPercent),
-    [contextPercent, lastUsage, messages]
+    () => buildRailData(messages),
+    [messages]
   );
   const streamingStatus = useMemo(
     () => getStreamingStatus(messages, status),
@@ -1019,12 +1129,12 @@ export function ChatPanel({
                       <div
                         className={cn(
                           message.role === "user"
-                            ? "max-w-[min(38rem,88%)] rounded-xl border border-border/70 bg-background px-3.5 py-2.5 shadow-[var(--shadow-1)]"
-                            : "w-full max-w-[52rem] rounded-xl border border-ai-line bg-ai-surface px-4 py-4 shadow-[var(--shadow-1)] sm:px-5"
+                            ? "max-w-[min(38rem,88%)] rounded-xl bg-blue-600 px-3.5 py-2.5 text-white shadow-[var(--shadow-1)]"
+                            : "w-full max-w-[52rem]"
                         )}
                       >
                         {message.role === "user" ? (
-                          <p className="whitespace-pre-wrap text-sm leading-7 text-foreground">{userText}</p>
+                          <p className="whitespace-pre-wrap text-sm leading-7 text-white">{userText}</p>
                         ) : (
                           <AssistantMessage
                             message={message}
@@ -1038,14 +1148,7 @@ export function ChatPanel({
                   );
                 })}
                 {isBusy && messages[messages.length - 1]?.role === "user" ? (
-                  <div className="flex justify-start">
-                    <div className="w-full max-w-[52rem] rounded-xl border border-ai-line bg-ai-surface px-4 py-3 shadow-[var(--shadow-1)] sm:px-5">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <StreamingDots />
-                        <span>{streamingStatus}</span>
-                      </div>
-                    </div>
-                  </div>
+                  <PendingAssistantCard status={streamingStatus} />
                 ) : null}
               </>
             )}
@@ -1097,22 +1200,6 @@ export function ChatPanel({
                   </kbd>{" "}
                   to send
                 </span>
-                {isBusy ? (
-                  <span className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground/80">
-                    <StreamingDots />
-                    {streamingStatus}
-                  </span>
-                ) : lastUsage ? (
-                  <span
-                    className="font-mono text-[11px] text-muted-foreground/70"
-                    title={`Input ${lastUsage.inputTokens ?? 0} · Output ${lastUsage.outputTokens ?? 0} · Total ${lastUsage.totalTokens ?? 0} tokens`}
-                  >
-                    {formatTokens(contextTokens)} / {formatTokens(CONTEXT_WINDOW_TOKENS)} ctx ({contextPercent.toFixed(0)}%)
-                    {lastUsage.outputTokens
-                      ? ` · ${formatTokens(lastUsage.outputTokens)} out`
-                      : ""}
-                  </span>
-                ) : null}
                 <InputGroupButton
                   type="submit"
                   variant="default"

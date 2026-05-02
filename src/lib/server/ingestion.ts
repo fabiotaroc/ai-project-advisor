@@ -131,9 +131,11 @@ export async function ingestSourceMaterial({
   const admin = createSupabaseAdminClient();
 
   try {
+    await admin.from("source_chunks").delete().eq("source_material_id", sourceId);
+
     await admin
       .from("source_materials")
-      .update({ status: "processing", parsed_content: text })
+      .update({ status: "processing", parsed_content: text, summary: null })
       .eq("id", sourceId);
 
     const [summary, chunks] = await Promise.all([
