@@ -113,4 +113,3 @@ The same applies to reusable file metadata such as MIME type, extension, size, p
 - If changing `type` now is too disruptive, keep the current values temporarily and still add `source_file_details`.
 - `Emails` may later need a deeper thread/message model if the product evolves from message ingestion into true thread-native workflows.
 - Add indexes that match the new UI, especially project-plus-type list queries.
-

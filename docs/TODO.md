@@ -1,12 +1,13 @@
 ### Sources/wiki:
-[ ] Rename sources to "Artifacts" or something similar like "Files"
+[x] Rename sources to "Artifacts" or something similar like "Files"
 [ ] Content preview for pptx, docx, excel (slideshow for pptx, table for excel), then open in (choose application) and download file button
 [ ] sources/artifacts should also be where user creates new docs/markdowns, slides, etc in collaboration with the agent (like mike has but for pptx).
 [ ] Wiki division. Wiki should be basically 100% hidden unless user really wants to go and see it by clicking around. Librarian should put the files inside the wiki unless specifically requested to surface them by the user. Choose stable, immutable project files, such as project.md, product.md, decisions.md, etc. These should be surfaced in the wiki view (name of the tab TBD).
 [ ] Add assistant sidebar to (files, meetings, emails, etc) like mike has.
+[x] apply backend migration @inputs_backend_data_model.md to the database, then customise each of the three types of sources (files, meetings, emails) page UIs
 
 ### Meetings:
-[ ] Transcript ingestion pipeline api call:
+[x] Transcript ingestion pipeline api call:
     - 2 sentence summary
     - decisions
     - action items
@@ -15,7 +16,7 @@
 
 ### Agent architecture:
 [ ] rethink librarian vs advisor split. user does not want to see "librarian" term. his only talking parter is the main Agent. The librarian should be a background agent that is not visible to the user. Maybe use the librarian as a subagent of the main agent.
-[ ] search sources is only vector, should be sql filtering as well. eg i ask for sources on a day, it filters by date. dedicated tools.ts file advisor agent.
+[x] search sources is only vector, should be sql filtering as well. eg i ask for sources on a day, it filters by date. dedicated tools.ts file advisor agent.
 [x] add citations in chat message (perplexity-style)
 
 ### Activity page:

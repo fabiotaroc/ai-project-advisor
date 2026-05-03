@@ -3,6 +3,7 @@ import { getOptionalSessionUser } from "@/lib/server/auth";
 import { getProjectAccessForUser, getSourceDetail } from "@/lib/server/data";
 import { extractText, ingestSourceMaterial } from "@/lib/server/ingestion";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { SourceMaterial } from "@/lib/types";
 
 export const maxDuration = 120;
 
@@ -17,7 +18,7 @@ export async function POST(
   const admin = createSupabaseAdminClient();
   const { data: source, error: sourceError } = await admin
     .from("source_materials")
-    .select("id,project_id,title,raw_storage_path")
+    .select("id,project_id,title,raw_storage_path,type")
     .eq("id", sourceId)
     .maybeSingle();
 
@@ -59,6 +60,7 @@ export async function POST(
       userId: user.id,
       text,
       title: source.title,
+      sourceType: source.type as SourceMaterial["type"],
     });
 
     const completed = await getSourceDetail(source.project_id, source.id);

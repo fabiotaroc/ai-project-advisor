@@ -15,6 +15,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
+  AlertTriangle,
   ClipboardList,
   Calendar,
   CircleHelp,
@@ -726,8 +727,18 @@ function SourceDetail({
           <span>·</span>
           <span className="inline-flex items-center gap-1.5">
             <Calendar className="size-3.5" />
-            {formatDateTime(source.created_at)}
+            {meetingInsights?.meetingAt
+              ? `Meeting · ${formatDateTime(meetingInsights.meetingAt)}`
+              : meetingInsights?.date
+                ? meetingInsights.date
+                : formatDateTime(source.created_at)}
           </span>
+          {view === "meetings" && meetingInsights && (meetingInsights.meetingAt || meetingInsights.date) ? (
+            <>
+              <span>·</span>
+              <span>Uploaded {formatDateTime(source.created_at)}</span>
+            </>
+          ) : null}
         </div>
       </header>
 
@@ -810,7 +821,9 @@ type MeetingInsights = {
   decisions: string[];
   actionItems: string[];
   openQuestions: string[];
+  risks: string[];
   date: string | null;
+  meetingAt: string | null;
   attendees: string[];
 };
 
@@ -833,6 +846,19 @@ function sourceDisplayTitle(source: SourceMaterialDetail, view: InputView) {
 }
 
 function getMeetingInsights(source: SourceMaterialDetail): MeetingInsights {
+  const md = source.meeting_details;
+  if (md) {
+    return {
+      decisions: md.decisions.slice(0, 5),
+      actionItems: md.action_items.slice(0, 6),
+      openQuestions: md.open_questions.slice(0, 5),
+      risks: md.risks.slice(0, 5),
+      date: null,
+      meetingAt: md.meeting_at,
+      attendees: md.participants.slice(0, 12),
+    };
+  }
+
   return {
     decisions: uniqueItems([
       ...extractMarkdownBullets(source.summary, ["decisions", "key decisions"]),
@@ -854,7 +880,13 @@ function getMeetingInsights(source: SourceMaterialDetail): MeetingInsights {
       ...extractMarkdownBullets(source.parsed_content, ["open questions", "questions", "open items"]),
       ...extractKeywordLines(source.summary, [/question/i, /open/i, /unclear/i]),
     ]).slice(0, 5),
+    risks: uniqueItems([
+      ...extractMarkdownBullets(source.summary, ["risks", "concerns", "blockers"]),
+      ...extractMarkdownBullets(source.parsed_content, ["risks", "concerns", "blockers"]),
+      ...extractKeywordLines(source.summary, [/risk/i, /blocker/i, /concern/i]),
+    ]).slice(0, 5),
     date: extractMarkdownMetadataValue(source.parsed_content, "Date"),
+    meetingAt: null,
     attendees: uniqueItems([
       ...extractMarkdownBullets(source.parsed_content, ["attendees", "participants"]),
       ...extractInlineList(extractMarkdownMetadataValue(source.parsed_content, "Attendees")),
@@ -902,10 +934,22 @@ function MeetingInsightGrid({ insights }: { insights: MeetingInsights }) {
         emptyText="No action items extracted yet."
       />
       <MeetingInsightTextSection
+        title="Risks"
+        icon={<AlertTriangle className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />}
+        items={insights.risks}
+        emptyText="No risks extracted yet."
+      />
+      <MeetingInsightTextSection
         title="Open questions"
         icon={<CircleHelp className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />}
         items={insights.openQuestions}
         emptyText="No open questions extracted yet."
+      />
+      <MeetingInsightTextSection
+        title="Participants"
+        icon={<UserRound className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />}
+        items={insights.attendees}
+        emptyText="No participants listed yet."
       />
     </div>
   );

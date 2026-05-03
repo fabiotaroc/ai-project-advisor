@@ -84,12 +84,23 @@ export type SourceChunkReference = {
   char_end: number | null;
 };
 
+export type SourceMeetingDetails = {
+  short_summary: string | null;
+  decisions: string[];
+  action_items: string[];
+  risks: string[];
+  open_questions: string[];
+  participants: string[];
+  meeting_at: string | null;
+};
+
 export type SourceMaterialDetail = SourceMaterial & {
   chunk_count: number;
   chunks: SourceChunkReference[];
   uploader: SourceUploader | null;
   linked_activity: SourceLinkedActivity[];
   linked_runs: SourceLinkedRun[];
+  meeting_details: SourceMeetingDetails | null;
 };
 
 export type ActivityEvent = {

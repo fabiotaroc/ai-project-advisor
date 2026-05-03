@@ -20,6 +20,7 @@ import type {
   SourceChunkReference,
   SourceMaterial,
   SourceMaterialDetail,
+  SourceMeetingDetails,
   SourceUploader,
 } from "@/lib/types";
 
@@ -211,6 +212,14 @@ export async function getSourceDetail(
   return sources[0] ?? null;
 }
 
+function jsonbStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 async function getSourceDetailsForProject(
   projectId: string,
   filterSourceIds?: string[],
@@ -250,7 +259,12 @@ async function getSourceDetailsForProject(
 
   const admin = createSupabaseAdminClient();
 
-  const [chunksResult, profilesResult, activityResult, runsResult] = await Promise.all([
+  const meetingSourceIds = sources
+    .filter((source) => source.type === "meeting")
+    .map((source) => source.id);
+
+  const [chunksResult, profilesResult, activityResult, runsResult, meetingDetailsResult] =
+    await Promise.all([
     supabase
       .from("source_chunks")
       .select("id,source_material_id,content,chunk_index,char_start,char_end")
@@ -274,12 +288,21 @@ async function getSourceDetailsForProject(
       .in("trigger_ref", sourceIds)
       .order("started_at", { ascending: false })
       .limit(200),
+    meetingSourceIds.length > 0
+      ? supabase
+          .from("source_meeting_details")
+          .select(
+            "source_material_id,short_summary,decisions,action_items,risks,open_questions,participants,meeting_at",
+          )
+          .in("source_material_id", meetingSourceIds)
+      : Promise.resolve({ data: [], error: null } as const),
   ]);
 
   if (chunksResult.error) throw chunksResult.error;
   if (profilesResult.error) throw profilesResult.error;
   if (activityResult.error) throw activityResult.error;
   if (runsResult.error) throw runsResult.error;
+  if (meetingDetailsResult.error) throw meetingDetailsResult.error;
 
   const chunksBySource = new Map<string, SourceChunkReference[]>();
   for (const row of chunksResult.data ?? []) {
@@ -332,6 +355,19 @@ async function getSourceDetailsForProject(
     runsBySource.set(row.trigger_ref, list);
   }
 
+  const meetingDetailsBySourceId = new Map<string, SourceMeetingDetails>();
+  for (const row of meetingDetailsResult.data ?? []) {
+    meetingDetailsBySourceId.set(row.source_material_id, {
+      short_summary: row.short_summary,
+      decisions: jsonbStringArray(row.decisions),
+      action_items: jsonbStringArray(row.action_items),
+      risks: jsonbStringArray(row.risks),
+      open_questions: jsonbStringArray(row.open_questions),
+      participants: jsonbStringArray(row.participants),
+      meeting_at: row.meeting_at,
+    });
+  }
+
   return sources.map((source) => ({
     ...source,
     chunk_count: chunksBySource.get(source.id)?.length ?? 0,
@@ -339,6 +375,8 @@ async function getSourceDetailsForProject(
     uploader: source.uploaded_by ? uploaders.get(source.uploaded_by) ?? null : null,
     linked_activity: activityBySource.get(source.id) ?? [],
     linked_runs: runsBySource.get(source.id) ?? [],
+    meeting_details:
+      source.type === "meeting" ? meetingDetailsBySourceId.get(source.id) ?? null : null,
   }));
 }
 

@@ -435,9 +435,121 @@ export type Database = {
         }
         Relationships: []
       }
+      source_email_details: {
+        Row: {
+          attachments: Json
+          canonical_subject: string | null
+          cc_addresses: Json
+          created_at: string
+          from_address: string | null
+          in_reply_to: string | null
+          key_decisions: Json
+          latest_state: string | null
+          message_id: string | null
+          references: string | null
+          requested_actions: Json
+          sent_at: string | null
+          source_material_id: string
+          to_addresses: Json
+          updated_at: string
+        }
+        Insert: {
+          attachments?: Json
+          canonical_subject?: string | null
+          cc_addresses?: Json
+          created_at?: string
+          from_address?: string | null
+          in_reply_to?: string | null
+          key_decisions?: Json
+          latest_state?: string | null
+          message_id?: string | null
+          references?: string | null
+          requested_actions?: Json
+          sent_at?: string | null
+          source_material_id: string
+          to_addresses?: Json
+          updated_at?: string
+        }
+        Update: {
+          attachments?: Json
+          canonical_subject?: string | null
+          cc_addresses?: Json
+          created_at?: string
+          from_address?: string | null
+          in_reply_to?: string | null
+          key_decisions?: Json
+          latest_state?: string | null
+          message_id?: string | null
+          references?: string | null
+          requested_actions?: Json
+          sent_at?: string | null
+          source_material_id?: string
+          to_addresses?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      source_file_details: {
+        Row: {
+          created_at: string
+          extracted_title: string | null
+          extraction_status: string | null
+          file_extension: string | null
+          file_size_bytes: number | null
+          language: string | null
+          metadata: Json
+          mime_type: string | null
+          original_filename: string | null
+          page_count: number | null
+          preview_status: string | null
+          sheet_count: number | null
+          slide_count: number | null
+          source_material_id: string
+          updated_at: string
+          word_count: number | null
+        }
+        Insert: {
+          created_at?: string
+          extracted_title?: string | null
+          extraction_status?: string | null
+          file_extension?: string | null
+          file_size_bytes?: number | null
+          language?: string | null
+          metadata?: Json
+          mime_type?: string | null
+          original_filename?: string | null
+          page_count?: number | null
+          preview_status?: string | null
+          sheet_count?: number | null
+          slide_count?: number | null
+          source_material_id: string
+          updated_at?: string
+          word_count?: number | null
+        }
+        Update: {
+          created_at?: string
+          extracted_title?: string | null
+          extraction_status?: string | null
+          file_extension?: string | null
+          file_size_bytes?: number | null
+          language?: string | null
+          metadata?: Json
+          mime_type?: string | null
+          original_filename?: string | null
+          page_count?: number | null
+          preview_status?: string | null
+          sheet_count?: number | null
+          slide_count?: number | null
+          source_material_id?: string
+          updated_at?: string
+          word_count?: number | null
+        }
+        Relationships: []
+      }
       source_materials: {
         Row: {
           created_at: string
+          file_kind: string | null
           id: string
           metadata: Json
           parsed_content: string | null
@@ -452,6 +564,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          file_kind?: string | null
           id?: string
           metadata?: Json
           parsed_content?: string | null
@@ -466,6 +579,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          file_kind?: string | null
           id?: string
           metadata?: Json
           parsed_content?: string | null
@@ -477,6 +591,45 @@ export type Database = {
           type?: string
           updated_at?: string
           uploaded_by?: string | null
+        }
+        Relationships: []
+      }
+      source_meeting_details: {
+        Row: {
+          action_items: Json
+          created_at: string
+          decisions: Json
+          meeting_at: string | null
+          open_questions: Json
+          participants: Json
+          risks: Json
+          short_summary: string | null
+          source_material_id: string
+          updated_at: string
+        }
+        Insert: {
+          action_items?: Json
+          created_at?: string
+          decisions?: Json
+          meeting_at?: string | null
+          open_questions?: Json
+          participants?: Json
+          risks?: Json
+          short_summary?: string | null
+          source_material_id: string
+          updated_at?: string
+        }
+        Update: {
+          action_items?: Json
+          created_at?: string
+          decisions?: Json
+          meeting_at?: string | null
+          open_questions?: Json
+          participants?: Json
+          risks?: Json
+          short_summary?: string | null
+          source_material_id?: string
+          updated_at?: string
         }
         Relationships: []
       }

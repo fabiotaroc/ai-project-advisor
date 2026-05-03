@@ -4,6 +4,7 @@ import { getProjectAccessForUser, getSourceDetail } from "@/lib/server/data";
 import { extractText, ingestSourceMaterial } from "@/lib/server/ingestion";
 import { triggerOnSourceIngested } from "@/lib/server/librarian/triggers";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { SourceMaterial } from "@/lib/types";
 
 export const maxDuration = 120;
 
@@ -98,6 +99,10 @@ export async function PUT(request: NextRequest, { params }: SourceRouteContext) 
     })
     .eq("id", source.id);
 
+  if (category !== "meeting") {
+    await admin.from("source_meeting_details").delete().eq("source_material_id", source.id);
+  }
+
   try {
     const text = await extractText(buffer, file.name);
     await ingestSourceMaterial({
@@ -106,6 +111,7 @@ export async function PUT(request: NextRequest, { params }: SourceRouteContext) 
       userId: user.id,
       text,
       title: file.name,
+      sourceType: category as SourceMaterial["type"],
     });
 
     after(async () => {

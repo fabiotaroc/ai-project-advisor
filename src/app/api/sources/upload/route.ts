@@ -4,6 +4,7 @@ import { getProjectAccessForUser, getSourceDetail } from "@/lib/server/data";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { extractText, ingestSourceMaterial } from "@/lib/server/ingestion";
 import { triggerOnSourceIngested } from "@/lib/server/librarian/triggers";
+import type { SourceMaterial } from "@/lib/types";
 
 export const maxDuration = 120;
 
@@ -69,6 +70,7 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       text,
       title: file.name,
+      sourceType: category as SourceMaterial["type"],
     });
 
     after(async () => {
