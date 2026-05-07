@@ -8,7 +8,6 @@ import {
 export type AssembledChatPrompt = {
   system: string;
   toolMode: AgentRunMode;
-  canCreateEntityPages: boolean;
 };
 
 export async function assembleProjectSystemPrompt(
@@ -22,41 +21,29 @@ export async function assembleProjectSystemPrompt(
     { data: settings },
     { data: profile },
     { data: member },
-    { data: coreFiles },
-    { data: memoryFiles },
+    { data: canonicalDocs },
   ] = await Promise.all([
     supabase.from("projects").select("name,owner_id").eq("id", projectId).single(),
     supabase.from("project_settings").select("*").eq("project_id", projectId).maybeSingle(),
     supabase.from("profiles").select("email,name").eq("id", userId).single(),
     supabase.from("project_members").select("role").eq("project_id", projectId).eq("user_id", userId).maybeSingle(),
     supabase
-      .from("project_files")
-      .select("path,content")
-      .eq("project_id", projectId)
-      .is("deleted_at", null)
-      .in("path", ["index.md", "log.md", "glossary.md", "PROJECT.md", "WORK.md", "PRODUCT.md"]),
-    supabase
-      .from("project_files")
-      .select("path,content")
-      .eq("project_id", projectId)
-      .is("deleted_at", null)
-      .like("path", "memory/%")
-      .order("created_at", { ascending: false })
-      .limit(3),
+      .from("canonical_docs")
+      .select("slug,title,is_default,is_pinned,updated_at")
+      .eq("project_id", projectId),
   ]);
 
-  const fileMap = new Map((coreFiles ?? []).map((f) => [f.path, f.content]));
   const role = project?.owner_id === userId ? "owner" : (member?.role ?? "viewer");
   const projectSettings = settings as ProjectSettings | null;
   const toolMode = resolveAdvisorToolMode(projectSettings);
-  const canCreateEntityPages = projectSettings?.auto_create_entity_pages ?? true;
 
   const parts: string[] = [];
 
   parts.push(
     [
       "You are an AI project advisor for non-technical users. You help manage and synthesize knowledge about their project. Keep responses concrete, helpful, and action-oriented.",
-      "Focus on answering the user well in-conversation. A separate background Librarian agent owns wiki curation: it maintains index.md and log.md, synthesizes ingested sources, keeps memory entries, proposes lints, and decides when chat syntheses deserve their own page. Do not try to replicate its job — when the user asks to 'lint the wiki', 'curate', 'audit', or 'check wiki health', call the `trigger_wiki_lint` tool with a `focus` string when they name an area **or** state a factual correction (e.g. two pages are the same person). Pass their wording **verbatim** for corrections — do not soften “they are the same” into “check whether they might be duplicates”. Then tell them the lint is running and its results will appear in log.md and the activity feed.",
+      "The project's wiki is a fixed set of canonical docs (`project`, `decisions`, `people`, `work`, `glossary`, plus any user-pinned customs). You can read them via `read_canonical_doc` and `list_canonical_docs`. When the user explicitly asks you to remember, record, save, or update project knowledge, call `propose_wiki_update`; do not claim the wiki was updated until the user saves the proposal card.",
+      "Background source ingestion produces reviewable pending edits against the canonical docs; those are accepted/rejected from the source detail page, not from chat.",
     ].join(" "),
   );
 
@@ -66,52 +53,28 @@ export async function assembleProjectSystemPrompt(
 
   parts.push(`# Current User\n${profile?.name ?? "Unknown"} (${profile?.email ?? ""}) — role: ${role}`);
 
-  parts.push(
-    `# Mode\n${toolMode === "write" ? "write — file tools apply changes to the wiki immediately (subject to locks and your role)." : "proposal — file tools record intent only; nothing is written until an editor applies changes. Still call the tools you would have used so the transcript shows what you recommend."}`,
-  );
-
-  const glossary = fileMap.get("glossary.md");
-  if (glossary) {
-    parts.push(`# Glossary\nThese are project-specific terms. Always use them correctly.\n\n${glossary}`);
-  }
-
-  const projectMd = fileMap.get("PROJECT.md");
-  if (projectMd) parts.push(`# PROJECT.md\n${projectMd}`);
-
-  const workMd = fileMap.get("WORK.md");
-  if (workMd) parts.push(`# WORK.md\n${workMd}`);
-
-  const productMd = fileMap.get("PRODUCT.md");
-  if (productMd) parts.push(`# PRODUCT.md\n${productMd}`);
-
-  if (memoryFiles?.length) {
-    parts.push(
-      `# Recent Memory\n${memoryFiles.map((f) => `## ${f.path}\n${f.content}`).join("\n\n")}`,
-    );
-  }
-
-  const indexMd = fileMap.get("index.md");
-  if (indexMd) {
-    parts.push(
-      `# Wiki Index\nThis is the catalog of all project wiki pages. Use read_file to access any file listed here.\n\n${indexMd}`,
-    );
+  if (canonicalDocs && canonicalDocs.length > 0) {
+    const docList = canonicalDocs
+      .slice()
+      .sort((a, b) => {
+        if (a.is_default !== b.is_default) return a.is_default ? -1 : 1;
+        return String(a.slug).localeCompare(String(b.slug));
+      })
+      .map((d) => `- ${d.slug}.md — ${d.title} ${d.is_default ? "(default)" : "(pinned)"}`)
+      .join("\n");
+    parts.push(`# Canonical docs in this project\n${docList}\n\nUse \`read_canonical_doc\` with a slug to read full bodies.`);
   }
 
   parts.push(
     [
       "# Available Tools",
-      "- list_files — inventory of live project files with metadata",
-      "- read_file — read a project file by path",
-      "- create_file — create a new file (fails if one exists at the path); requires `reason`",
-      "- edit_file — create or overwrite a file’s content; requires `reason`; for is_source_of_truth files pass confirm_source_of_truth: true",
-      "- rename_file — move a file; requires `reason`",
-      "- delete_file — soft-delete a file; locked and source-of-truth files rejected; requires `reason`",
+      "- list_canonical_docs — inventory of canonical docs in this project (slugs + titles)",
+      "- read_canonical_doc — read the full body of a canonical doc by slug",
       "- search_sources — hybrid semantic + keyword search over ingested source chunks",
       "- read_source — full source material by id (only ids from search_sources)",
-      "- record_suggestion — log a question/source/fix for the user; not for file edits",
-      "- trigger_wiki_lint — background wiki health check; optional `focus` (scope or user’s verbatim correction). Use when they ask to lint/curate/audit the wiki.",
+      "- propose_wiki_update — create a reviewable chat memory proposal for one canonical doc; use only after an explicit user request",
+      "- record_suggestion — log a question/source/fix for the user; not for wiki edits",
       "- Only call read_source with a sourceMaterialId returned by search_sources. If search_sources returns no results, do not call read_source.",
-      "- The background Librarian keeps index.md and log.md in sync after chat; do not micromanage those from chat.",
     ].join("\n"),
   );
 
@@ -129,7 +92,6 @@ export async function assembleProjectSystemPrompt(
   return {
     system: parts.join("\n\n"),
     toolMode,
-    canCreateEntityPages,
   };
 }
 
@@ -141,7 +103,7 @@ function serializeSettings(settings: ProjectSettings | null): string {
   const proactivityDesc: Record<string, string> = {
     reactive: "Only respond when asked. Do not suggest changes unprompted.",
     suggestive: "You may suggest improvements and flag issues, but wait for approval before making changes.",
-    proactive: "Proactively make improvements, create wiki pages, and suggest changes.",
+    proactive: "Proactively make improvements and suggest changes.",
   };
 
   const lines = [
@@ -162,17 +124,6 @@ function serializeSettings(settings: ProjectSettings | null): string {
   if (contextLines.length > 0) {
     lines.push("", "# Project Context", ...contextLines);
   }
-
-  lines.push(
-    "",
-    "# Agent Permissions",
-    settings.auto_synthesize_on_ingest
-      ? "- Auto-synthesize on ingest: yes — automatically create wiki pages when new sources are ingested"
-      : "- Auto-synthesize on ingest: no — wait for the user to request synthesis",
-    settings.auto_create_entity_pages
-      ? "- Auto-create entity pages: yes — create pages for recurring entities automatically"
-      : "- Auto-create entity pages: no — ask before creating new entity pages",
-  );
 
   return lines.join("\n");
 }

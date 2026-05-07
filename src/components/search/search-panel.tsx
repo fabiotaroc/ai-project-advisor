@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 type SearchResult = {
-  type: "file" | "source";
+  type: "doc" | "source";
   id: string;
   title: string;
   excerpt: string;
@@ -46,7 +46,7 @@ export function SearchPanel({ projectId }: { projectId: string }) {
     <div className="flex flex-col gap-4">
       <h1 className="text-lg font-semibold tracking-tight">Search</h1>
       <p className="text-sm text-muted-foreground">
-        Search across wiki files (text match) and project inputs (semantic search).
+        Search across canonical wiki docs and project inputs.
       </p>
       <form
         className="flex gap-2"
@@ -63,7 +63,7 @@ export function SearchPanel({ projectId }: { projectId: string }) {
             id="search-query"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search wiki, files, meetings, emails, and memories..."
+            placeholder="Search wiki docs, files, meetings, emails, and memories..."
           />
         </div>
         <Button type="submit" disabled={!query.trim() || isSearching}>
@@ -81,7 +81,7 @@ export function SearchPanel({ projectId }: { projectId: string }) {
             <Card key={`${result.type}-${result.id}`} size="sm">
               <CardContent className="flex items-start gap-3 px-4 py-3">
                 <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
-                  {result.type === "file" ? (
+                  {result.type === "doc" ? (
                     <FileText className="size-4 text-muted-foreground" />
                   ) : (
                     <BookOpen className="size-4 text-muted-foreground" />
@@ -91,7 +91,7 @@ export function SearchPanel({ projectId }: { projectId: string }) {
                   <div className="flex items-center gap-2">
                     <h2 className="truncate text-sm font-semibold">{result.title}</h2>
                     <Badge variant="outline" className="shrink-0 text-[10px]">
-                      {result.type === "file" ? "Wiki" : "Input"}
+                      {result.type === "doc" ? "Wiki" : "Input"}
                     </Badge>
                     {result.similarity != null && (
                       <span className="shrink-0 text-[10px] text-muted-foreground">

@@ -242,3 +242,25 @@ body {
     text-rendering: optimizeLegibility;
   }
 }
+
+@keyframes wiki-edit-flash {
+  0% {
+    box-shadow: 0 0 0 0 oklch(from var(--ring) l c h / 0.34);
+  }
+  45% {
+    box-shadow: 0 0 0 6px oklch(from var(--ring) l c h / 0.18);
+  }
+  100% {
+    box-shadow: 0 0 0 0 oklch(from var(--ring) l c h / 0);
+  }
+}
+
+.wiki-edit-flash {
+  animation: wiki-edit-flash 900ms ease-out 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wiki-edit-flash {
+    animation: none;
+  }
+}

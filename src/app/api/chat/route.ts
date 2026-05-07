@@ -1,5 +1,4 @@
 import { consumeStream, streamText, convertToModelMessages, UIMessage } from "ai";
-import { after } from "next/server";
 import { openai, type OpenAILanguageModelResponsesOptions } from "@ai-sdk/openai";
 import { z } from "zod";
 import { getOptionalSessionUser } from "@/lib/server/auth";
@@ -10,7 +9,6 @@ import {
   replaceConversationMessages,
 } from "@/lib/server/chat-history";
 import { assembleProjectSystemPrompt } from "@/lib/server/chat-context";
-import { triggerOnConversationEnded } from "@/lib/server/librarian/triggers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { buildAgentTools } from "@/lib/server/agent-tools";
 import type { LibrarianRunRecord } from "@/lib/server/agent-tools";
@@ -39,13 +37,10 @@ export async function POST(request: Request) {
   const projectId = body.projectId;
   const canWrite = access.role !== "viewer";
   const userSupabase = await createSupabaseServerClient();
-  const { system, toolMode, canCreateEntityPages } = await assembleProjectSystemPrompt(
-    projectId,
-    user.id,
-  );
+  const { system, toolMode } = await assembleProjectSystemPrompt(projectId, user.id);
   const conversation = await getOrCreateProjectConversation(projectId, user.id, body.conversationId, body.messages);
 
-  const advisorRecord: LibrarianRunRecord = { actions: [], suggestions: [] };
+  const advisorRecord: LibrarianRunRecord = { suggestions: [] };
 
   void applyAiChatTitleIfAuto({
     conversationId: conversation.id,
@@ -63,7 +58,7 @@ export async function POST(request: Request) {
     abortSignal: request.signal,
     providerOptions: {
       openai: {
-        reasoningEffort: "medium",
+        reasoningEffort: "low",
         reasoningSummary: "auto",
       } satisfies OpenAILanguageModelResponsesOptions,
     },
@@ -75,7 +70,6 @@ export async function POST(request: Request) {
         conversationId: conversation.id,
         mode: toolMode,
         canWrite,
-        canCreateEntityPages,
         userSupabase,
       },
       advisorRecord,
@@ -97,7 +91,7 @@ export async function POST(request: Request) {
         };
       }
     },
-    onFinish: async ({ messages, isAborted, finishReason }) => {
+    onFinish: async ({ messages, isAborted }) => {
       if (isAborted) {
         return;
       }
@@ -107,28 +101,6 @@ export async function POST(request: Request) {
       } catch (error) {
         console.error("Failed to persist conversation history", error);
       }
-
-      // Each /api/chat POST ends with onFinish. When the step finished on tool
-      // calls, the client (sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls)
-      // will send a follow-up request to continue the same user turn. Only run
-      // the Librarian on the final step of the turn — when the model stopped
-      // for a real reason ("stop" / "length" / "content-filter") and not
-      // because it emitted tool calls awaiting results.
-      if (finishReason === "tool-calls") {
-        return;
-      }
-
-      after(async () => {
-        try {
-          await triggerOnConversationEnded({
-            projectId,
-            userId: user.id,
-            conversationId: conversation.id,
-          });
-        } catch (err) {
-          console.error("Librarian trigger on conversation end failed", err);
-        }
-      });
     },
   });
 }

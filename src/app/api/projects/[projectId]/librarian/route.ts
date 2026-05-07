@@ -2,23 +2,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getOptionalSessionUser } from "@/lib/server/auth";
 import { getProjectAccessForUser } from "@/lib/server/data";
-import {
-  triggerOnConversationEnded,
-  triggerWikiLint,
-} from "@/lib/server/librarian/triggers";
+import { triggerOnSourceIngested } from "@/lib/server/librarian/triggers";
 
 export const maxDuration = 120;
 
-const schema = z.discriminatedUnion("trigger", [
-  z.object({
-    trigger: z.literal("conversation"),
-    conversationId: z.string().uuid(),
-  }),
-  z.object({
-    trigger: z.literal("lint"),
-    focus: z.string().min(1).max(500).optional(),
-  }),
-]);
+const schema = z.object({
+  trigger: z.literal("source_ingested"),
+  sourceId: z.string().uuid(),
+});
 
 export async function POST(
   request: Request,
@@ -43,19 +34,10 @@ export async function POST(
 
   const body = schema.parse(await request.json());
 
-  if (body.trigger === "conversation") {
-    const result = await triggerOnConversationEnded({
-      projectId,
-      userId: user.id,
-      conversationId: body.conversationId,
-    });
-    return NextResponse.json({ run: result });
-  }
-
-  const result = await triggerWikiLint({
+  const result = await triggerOnSourceIngested({
     projectId,
     userId: user.id,
-    userFocus: body.focus,
+    sourceId: body.sourceId,
   });
   return NextResponse.json({ run: result });
 }

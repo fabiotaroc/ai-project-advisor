@@ -1,6 +1,6 @@
 import type { SourceMaterial } from "@/lib/types";
 
-export type SourceCategory = SourceMaterial["type"];
+export type SourceCategory = Exclude<SourceMaterial["type"], "migration">;
 
 export type StagedFile = {
   id: string;

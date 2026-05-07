@@ -21,6 +21,10 @@ import remarkGfm from "remark-gfm";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  WikiProposalCard,
+  type WikiProposalToolOutput,
+} from "@/components/chat/wiki-proposal-card";
 import type { ProjectConversationListItem } from "@/lib/types";
 import {
   InputGroup,
@@ -63,10 +67,24 @@ function getStringProperty(value: unknown, key: string) {
   return typeof property === "string" ? property.trim() : "";
 }
 
-function getBooleanProperty(value: unknown, key: string) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const property = (value as Record<string, unknown>)[key];
-  return property === true;
+function getWikiProposalOutput(output: unknown): WikiProposalToolOutput | null {
+  if (!output || typeof output !== "object" || Array.isArray(output)) return null;
+  const record = output as Record<string, unknown>;
+  if (record.proposed !== true && typeof record.edit_id !== "string") return null;
+  return {
+    proposed: record.proposed === true,
+    error: typeof record.error === "string" ? record.error : undefined,
+    edit_id: typeof record.edit_id === "string" ? record.edit_id : undefined,
+    status:
+      record.status === "accepted" || record.status === "rejected" || record.status === "pending"
+        ? record.status
+        : undefined,
+    target_doc_id: typeof record.target_doc_id === "string" ? record.target_doc_id : undefined,
+    target_doc_slug: typeof record.target_doc_slug === "string" ? record.target_doc_slug : undefined,
+    target_doc_title: typeof record.target_doc_title === "string" ? record.target_doc_title : undefined,
+    inserted_text: typeof record.inserted_text === "string" ? record.inserted_text : undefined,
+    reason: typeof record.reason === "string" ? record.reason : null,
+  };
 }
 
 /**
@@ -82,28 +100,21 @@ function describeToolRow(
 ): { label: string; isError: boolean; isRunning: boolean } {
   const running = isRunningToolState(state);
   const failed = state === "output-error";
-  const path = getStringProperty(input, "path");
   const query = getStringProperty(input, "query");
-  const created = getBooleanProperty(output, "created");
   const sourceTitle = getStringProperty(output, "title");
   const hits = Array.isArray(output) ? output.length : null;
 
   const make = (label: string) => ({ label, isError: failed, isRunning: running });
 
   switch (toolName) {
-    case "list_files":
-      if (failed) return make("Couldn't list project files");
-      return make(running ? "Listing project files..." : "Listed project files");
-    case "read_file": {
-      const target = truncate(path || "file", 48);
+    case "list_canonical_docs":
+      if (failed) return make("Couldn't list project docs");
+      return make(running ? "Listing canonical docs..." : "Listed canonical docs");
+    case "read_canonical_doc": {
+      const slug = getStringProperty(input, "slug");
+      const target = truncate(slug || "doc", 48);
       if (failed) return make(`Couldn't read ${target}`);
       return make(running ? `Reading ${target}...` : `Read ${target}`);
-    }
-    case "edit_file": {
-      const target = truncate(path || "file", 48);
-      if (failed) return make(`Couldn't update ${target}`);
-      if (running) return make(`Updating ${target}...`);
-      return make(created ? `Created ${target}` : `Updated ${target}`);
     }
     case "search_sources": {
       const q = query ? `'${truncate(query, 40)}'` : "sources";
@@ -117,9 +128,12 @@ function describeToolRow(
       if (failed) return make("Couldn't open source");
       return make(running ? "Opening source..." : `Read ${label}`);
     }
-    case "trigger_wiki_lint":
-      if (failed) return make("Couldn't start Morgan pass");
-      return make(running ? "Starting Morgan pass..." : "Started Morgan pass");
+    case "propose_wiki_update": {
+      const slug = getStringProperty(input, "target_doc_slug");
+      const target = slug ? `${truncate(slug, 40)}.md` : "memory";
+      if (failed) return make(`Couldn't draft ${target}`);
+      return make(running ? `Drafting ${target} update...` : `Drafted ${target} update`);
+    }
     default: {
       const friendly = humanizeToolName(toolName) || "tool";
       if (failed) return make(`${friendly} failed`);
@@ -449,21 +463,15 @@ function getStreamingStatus(messages: UIMessage[], status: string) {
     return `Reading ${readSourceCount} ${readSourceCount === 1 ? "source" : "sources"}...`;
   }
 
-  const readFileCount = runningTools.filter((part) => getToolName(part) === "read_file").length;
-  if (readFileCount > 0) {
-    return `Reading ${readFileCount} project ${readFileCount === 1 ? "file" : "files"}...`;
+  const readDocCount = runningTools.filter(
+    (part) => getToolName(part) === "read_canonical_doc",
+  ).length;
+  if (readDocCount > 0) {
+    return `Reading ${readDocCount} canonical ${readDocCount === 1 ? "doc" : "docs"}...`;
   }
 
   if (runningTools.some((part) => getToolName(part) === "search_sources")) {
     return "Searching source material...";
-  }
-
-  if (runningTools.some((part) => getToolName(part) === "edit_file")) {
-    return "Updating project memory...";
-  }
-
-  if (runningTools.some((part) => getToolName(part) === "trigger_wiki_lint")) {
-    return "Starting Morgan memory pass...";
   }
 
   if (status === "streaming") return "Writing answer...";
@@ -477,24 +485,22 @@ function buildRailData(messages: UIMessage[]) {
 
   for (const message of messages) {
     if (message.role !== "assistant") continue;
+    for (const part of message.parts) {
+      if (!isToolPart(part)) continue;
+      const toolPart = part as ToolPartInfo;
+      if (getToolName(toolPart) !== "propose_wiki_update") continue;
+      const proposal = getWikiProposalOutput(toolPart.output);
+      if (!proposal?.edit_id) continue;
+      memoryMap.set(proposal.edit_id, {
+        key: proposal.edit_id,
+        path: `${proposal.target_doc_slug ?? "wiki"}.md`,
+        action: proposal.status === "accepted" ? "Updated" : "Created",
+      });
+    }
     for (const citation of getMessageCitations(message)) {
       if (!citationMap.has(citation.key)) {
         citationMap.set(citation.key, citation);
       }
-    }
-  }
-
-  for (const part of toolParts) {
-    const toolName = getToolName(part);
-
-    if (toolName === "edit_file" && part.output && typeof part.output === "object") {
-      const output = part.output as { path?: string; created?: boolean };
-      if (!output.path) continue;
-      memoryMap.set(output.path, {
-        key: output.path,
-        path: output.path,
-        action: output.created ? "Created" : "Updated",
-      });
     }
   }
 
@@ -631,7 +637,7 @@ function ChatRail({
             {memoryDrafts.map((draft) => (
               <Link
                 key={draft.key}
-                href={`/project/${projectId}/files`}
+                href={`/project/${projectId}/wiki`}
                 className="block rounded-lg border border-ai-line bg-ai-surface p-2.5 transition-colors hover:border-accent-line"
               >
                 <div className="flex items-center gap-2">
@@ -743,7 +749,8 @@ function AssistantTextPart({
 
 type AssistantGroup =
   | { kind: "trace"; key: string; items: TracePart[] }
-  | { kind: "text"; key: string; text: string };
+  | { kind: "text"; key: string; text: string }
+  | { kind: "wiki-proposal"; key: string; output: WikiProposalToolOutput };
 
 function AssistantMessage({
   message,
@@ -800,6 +807,24 @@ function AssistantMessage({
 
     if (isToolPart(part)) {
       const toolPart = part as ToolPartInfo;
+      const proposal =
+        getToolName(toolPart) === "propose_wiki_update"
+          ? getWikiProposalOutput(toolPart.output)
+          : null;
+
+      if (proposal && toolPart.state === "output-available") {
+        if (currentTrace) {
+          groups.push(currentTrace);
+          currentTrace = null;
+        }
+        groups.push({
+          kind: "wiki-proposal",
+          key: toolPart.toolCallId ?? `${message.id}-wiki-proposal-${index}`,
+          output: proposal,
+        });
+        continue;
+      }
+
       if (!currentTrace) {
         currentTrace = {
           kind: "trace",
@@ -831,13 +856,17 @@ function AssistantMessage({
           );
         }
 
+        if (group.kind === "wiki-proposal") {
+          return <WikiProposalCard key={group.key} output={group.output} />;
+        }
+
         if (group.items.length === 0) return null;
 
         // Auto-collapse this trace once any later group emits prose. The
         // PreResponseWrapper latches the minimized state internally.
         const hasTextAfter = groups
           .slice(groupIdx + 1)
-          .some((g) => g.kind === "text");
+          .some((g) => g.kind === "text" || g.kind === "wiki-proposal");
         const groupIsStreaming = group.items.some((item) =>
           item.kind === "reasoning"
             ? item.isStreaming
@@ -982,7 +1011,6 @@ export function ChatPanel({
 }) {
   const router = useRouter();
   const [input, setInput] = useState("");
-  const [railCollapsed, setRailCollapsed] = useState(true);
   const [hoveredRailCitationKey, setHoveredRailCitationKey] = useState<string | null>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -990,9 +1018,17 @@ export function ChatPanel({
   const isScrollingToBottomRef = useRef(false);
   const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shouldStickToBottomRef = useRef(true);
-  const prevCitationCountRef = useRef<number | null>(null);
 
   const stableChatId = chatId ?? `${projectId}-new`;
+  const [railState, setRailState] = useState<{
+    chatKey: string;
+    collapsed: boolean;
+    citationCount: number | null;
+  }>({
+    chatKey: stableChatId,
+    collapsed: true,
+    citationCount: null,
+  });
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
@@ -1012,11 +1048,6 @@ export function ChatPanel({
     },
   });
 
-  useEffect(() => {
-    prevCitationCountRef.current = null;
-    setRailCollapsed(true);
-  }, [stableChatId]);
-
   const isBusy = status === "submitted" || status === "streaming";
 
   const railData = useMemo(
@@ -1026,17 +1057,29 @@ export function ChatPanel({
   const citationCount = railData.citations.length;
   const citationRailVisible = citationCount > 0;
 
-  useEffect(() => {
-    const prev = prevCitationCountRef.current;
-    prevCitationCountRef.current = citationCount;
+  if (railState.chatKey !== stableChatId || railState.citationCount !== citationCount) {
+    const sameChat = railState.chatKey === stableChatId;
+    const nextCollapsed =
+      sameChat && railState.citationCount !== null && citationCount > railState.citationCount
+        ? false
+        : sameChat
+          ? railState.collapsed
+          : true;
+    setRailState({
+      chatKey: stableChatId,
+      collapsed: nextCollapsed,
+      citationCount,
+    });
+  }
 
-    // Skip the baseline pass so chats that already contain citations mount collapsed.
-    if (prev === null) return;
+  const railCollapsed = railState.chatKey === stableChatId ? railState.collapsed : true;
+  const setRailCollapsed = useCallback((next: boolean | ((current: boolean) => boolean)) => {
+    setRailState((current) => ({
+      ...current,
+      collapsed: typeof next === "function" ? next(current.collapsed) : next,
+    }));
+  }, []);
 
-    if (citationCount > prev) {
-      setRailCollapsed(false);
-    }
-  }, [citationCount]);
   const streamingStatus = useMemo(
     () => getStreamingStatus(messages, status),
     [messages, status]

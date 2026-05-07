@@ -26,7 +26,6 @@ import {
   createProjectConversation,
   deleteProjectConversation,
   renameProjectConversation,
-  triggerConversationMemory,
 } from "@/lib/chat-client";
 import {
   AlertDialog,
@@ -60,7 +59,7 @@ import type { ProjectConversationListItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const primaryLinks = [
-  { key: "files", label: "Wiki", icon: Library },
+  { key: "wiki", label: "Wiki", icon: Library },
   { key: "sources", label: "Files", icon: BookOpen },
   { key: "meetings", label: "Meetings", icon: Users },
   { key: "emails", label: "Emails", icon: Mail },
@@ -193,14 +192,6 @@ export function ProjectSidebar({
     setIsCreatingConversation(true);
 
     try {
-      const outgoing = activeConversationId
-        ? conversationItems.find((c) => c.id === activeConversationId)
-        : conversationItems[0];
-
-      if (outgoing) {
-        triggerConversationMemory(projectId, outgoing.id);
-      }
-
       const conversation = await createProjectConversation(projectId);
       router.push(`/project/${projectId}/chat?c=${conversation.id}`);
       router.refresh();

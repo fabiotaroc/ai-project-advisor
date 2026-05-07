@@ -20,13 +20,12 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createSupabaseServerClient();
 
-  const [ftsResult, vectorResult] = await Promise.all([
+  const [docsResult, vectorResult] = await Promise.all([
     supabase
-      .from("project_files")
-      .select("id,path,content")
+      .from("canonical_docs")
+      .select("id,slug,title,body")
       .eq("project_id", body.projectId)
-      .is("deleted_at", null)
-      .textSearch("content", body.query, { type: "plain" })
+      .textSearch("body", body.query, { type: "plain" })
       .limit(10),
 
     (async () => {
@@ -84,17 +83,17 @@ export async function POST(request: NextRequest) {
     })(),
   ]);
 
-  const fileResults = (ftsResult.data ?? []).map((file) => ({
-    type: "file" as const,
-    id: file.id,
-    title: file.path,
-    excerpt: file.content.slice(0, 280),
+  const docResults = (docsResult.data ?? []).map((doc) => ({
+    type: "doc" as const,
+    id: doc.id,
+    title: `${doc.title} (${doc.slug}.md)`,
+    excerpt: doc.body.slice(0, 280),
     similarity: null as number | null,
   }));
 
-  const results = [...fileResults, ...vectorResult].sort((a, b) => {
-    if (a.type === "file" && b.type === "source") return -1;
-    if (a.type === "source" && b.type === "file") return 1;
+  const results = [...docResults, ...vectorResult].sort((a, b) => {
+    if (a.type === "doc" && b.type === "source") return -1;
+    if (a.type === "source" && b.type === "doc") return 1;
     if (a.similarity != null && b.similarity != null) return b.similarity - a.similarity;
     return 0;
   });

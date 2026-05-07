@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 type SearchResult = {
-  type: "file" | "source";
+  type: "doc" | "source";
   id: string;
   title: string;
   excerpt: string;
@@ -103,12 +103,12 @@ export function SearchCommand({
     }
   }, [open]);
 
-  const fileResults = results.filter((r) => r.type === "file");
+  const docResults = results.filter((r) => r.type === "doc");
   const sourceResults = results.filter((r) => r.type === "source");
 
   function handleSelect(result: SearchResult) {
     onOpenChange(false);
-    if (result.type === "file") {
+    if (result.type === "doc") {
       router.push(`/project/${projectId}/search?q=${encodeURIComponent(query)}`);
     } else {
       router.push(
@@ -124,12 +124,12 @@ export function SearchCommand({
       open={open}
       onOpenChange={onOpenChange}
       title="Search"
-      description="Search across wiki files and project inputs"
+      description="Search across canonical docs and project inputs"
       className="sm:max-w-xl"
     >
       <Command shouldFilter={false}>
         <CommandInput
-          placeholder="Search wiki, files, meetings, emails, and memories..."
+          placeholder="Search wiki docs, files, meetings, emails, and memories..."
           value={query}
           onValueChange={setQuery}
         />
@@ -153,11 +153,11 @@ export function SearchCommand({
             </div>
           )}
 
-          {!isSearching && fileResults.length > 0 && (
+          {!isSearching && docResults.length > 0 && (
             <CommandGroup heading="Wiki">
-              {fileResults.map((result) => (
+              {docResults.map((result) => (
                 <CommandItem
-                  key={`file-${result.id}`}
+                  key={`doc-${result.id}`}
                   onSelect={() => handleSelect(result)}
                   className="gap-3"
                 >
@@ -175,7 +175,7 @@ export function SearchCommand({
             </CommandGroup>
           )}
 
-          {!isSearching && fileResults.length > 0 && sourceResults.length > 0 && (
+          {!isSearching && docResults.length > 0 && sourceResults.length > 0 && (
             <CommandSeparator />
           )}
 

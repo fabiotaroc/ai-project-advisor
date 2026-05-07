@@ -2,15 +2,16 @@
 
 import type { LucideIcon } from "lucide-react";
 import {
+  Check,
   CircleDashed,
   FilePlus2,
   FileText,
-  MessageSquare,
   MoveRight,
   Pencil,
   Sparkles,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -30,9 +31,7 @@ export const STATUS_COPY: Record<
 };
 
 export const TRIGGER_META: Record<TriggerType, { label: string; Icon: LucideIcon }> = {
-  conversation_ended: { label: "Memory pass", Icon: MessageSquare },
   source_ingested: { label: "Source indexed", Icon: Upload },
-  wiki_lint: { label: "Wiki cleanup", Icon: Sparkles },
 };
 
 export const ACTION_ICONS: Record<LibrarianAction["action"], LucideIcon> = {
@@ -50,27 +49,10 @@ export type ParsedRunSummary = {
 
 export function parseRunSummary(summary: string | null): ParsedRunSummary {
   if (!summary) return { subject: null, counts: null, body: null };
-
-  const match = summary.match(/^Librarian\s+(.+?):\s+([^.]+)\.\s*([\s\S]*)$/);
-  if (!match) return { subject: null, counts: null, body: summary };
-
-  return {
-    subject: match[1] || null,
-    counts: match[2] || null,
-    body: match[3] || null,
-  };
+  return { subject: null, counts: null, body: summary };
 }
 
 export function subjectLabel(subject: string | null) {
-  if (!subject) return null;
-
-  const chat = subject.match(/^chat\(([\s\S]*)\)$/);
-  if (chat?.[1]) return chat[1];
-
-  const ingest = subject.match(/^ingest\(([\s\S]*)\)$/);
-  if (ingest?.[1]) return ingest[1];
-
-  if (subject === "lint") return null;
   return subject;
 }
 
@@ -78,20 +60,17 @@ export function eventMeta(event: { event_type: string }): { label: string; Icon:
   if (event.event_type === "source_ingested") {
     return { label: "Source added", Icon: Upload };
   }
-  if (event.event_type === "agent_file_edit") {
-    return { label: "Morgan edited a file", Icon: FileText };
+  if (event.event_type === "librarian_pending_edits_extracted") {
+    return { label: "Pending wiki edits proposed", Icon: Sparkles };
   }
-  if (event.event_type === "agent_file_rename") {
-    return { label: "Morgan renamed a file", Icon: MoveRight };
+  if (event.event_type === "wiki_edit_accepted") {
+    return { label: "Wiki edit accepted", Icon: Check };
   }
-  if (event.event_type === "agent_file_delete") {
-    return { label: "Morgan deleted a file", Icon: Trash2 };
+  if (event.event_type === "wiki_edit_rejected") {
+    return { label: "Wiki edit rejected", Icon: X };
   }
   if (event.event_type === "advisor_suggestion") {
     return { label: "Morgan suggested a follow-up", Icon: Sparkles };
-  }
-  if (event.event_type === "file_edited") {
-    return { label: "You edited a file", Icon: FileText };
   }
   return { label: prettifyEventType(event.event_type), Icon: FileText };
 }

@@ -6,21 +6,6 @@ export type ProjectConversationListItem = {
   last_activity_at: string;
 };
 
-export type ProjectFile = {
-  id: string;
-  project_id: string;
-  path: string;
-  content: string;
-  created_by_agent: boolean;
-  pinned: boolean;
-  visibility: "surfaced" | "internal";
-  locked: boolean;
-  is_source_of_truth: boolean;
-  updated_by: string | null;
-  updated_at: string;
-  created_at: string;
-};
-
 export type ProjectSettings = {
   project_id: string;
   tone: "formal" | "conversational" | "neutral";
@@ -41,7 +26,7 @@ export type ProjectSettings = {
 export type SourceMaterial = {
   id: string;
   project_id: string;
-  type: "document" | "email" | "meeting" | "note";
+  type: "document" | "email" | "meeting" | "note" | "migration";
   title: string;
   summary: string | null;
   parsed_content: string | null;
@@ -130,7 +115,7 @@ export type LibrarianSuggestion = {
 export type LibrarianRun = {
   id: string;
   project_id: string;
-  trigger_type: "source_ingested" | "conversation_ended" | "wiki_lint";
+  trigger_type: "source_ingested";
   trigger_ref: string | null;
   mode: "write" | "proposal";
   status: "running" | "succeeded" | "failed";
@@ -190,4 +175,55 @@ export type ProjectInvite = {
   created_at: string;
   accepted_at: string | null;
   revoked_at: string | null;
+};
+
+export const DEFAULT_CANONICAL_DOC_SLUGS = [
+  "project",
+  "decisions",
+  "people",
+  "work",
+  "glossary",
+] as const;
+
+export type CanonicalDocSlug = (typeof DEFAULT_CANONICAL_DOC_SLUGS)[number] | (string & {});
+
+export type CanonicalDoc = {
+  id: string;
+  project_id: string;
+  slug: CanonicalDocSlug;
+  title: string;
+  body: string;
+  is_default: boolean;
+  is_pinned: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PendingWikiEditStatus = "pending" | "accepted" | "rejected";
+
+export type PendingWikiEdit = {
+  id: string;
+  project_id: string;
+  target_doc_id: string;
+  source_material_id: string | null;
+  origin: "ingestion" | "chat";
+  anchor: Record<string, unknown>;
+  inserted_text: string;
+  deleted_text: string | null;
+  reason: string | null;
+  confidence: number | null;
+  status: PendingWikiEditStatus;
+  repositioned: boolean;
+  fallback_applied: boolean;
+  created_by: string | null;
+  resolved_by: string | null;
+  created_at: string;
+  resolved_at: string | null;
+  target_doc: CanonicalDoc | null;
+};
+
+export type PendingWikiEditGroup = {
+  target_doc_id: string;
+  target_doc: CanonicalDoc | null;
+  edits: PendingWikiEdit[];
 };
