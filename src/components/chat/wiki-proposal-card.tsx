@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Edit3, Loader2, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,12 @@ export type WikiProposalToolOutput = {
 
 type CardState = "draft" | "editing" | "saved" | "discarded";
 
+function stateForStatus(status: WikiProposalToolOutput["status"]): CardState {
+  if (status === "accepted") return "saved";
+  if (status === "rejected") return "discarded";
+  return "draft";
+}
+
 export function WikiProposalCard({
   output,
   className,
@@ -29,12 +35,40 @@ export function WikiProposalCard({
   output: WikiProposalToolOutput;
   className?: string;
 }) {
-  const initialState: CardState =
-    output.status === "accepted" ? "saved" : output.status === "rejected" ? "discarded" : "draft";
-  const [state, setState] = useState<CardState>(initialState);
+  const [state, setState] = useState<CardState>(() => stateForStatus(output.status));
   const [draft, setDraft] = useState(output.inserted_text ?? "");
   const [error, setError] = useState<string | null>(output.error ?? null);
   const [busyAction, setBusyAction] = useState<"save" | "discard" | "draft" | null>(null);
+
+  useEffect(() => {
+    if (!output.edit_id || state !== "draft") return;
+
+    let cancelled = false;
+
+    async function refreshProposalState() {
+      try {
+        const response = await fetch(`/api/wiki/pending-edits/${output.edit_id}`);
+        const payload = (await response.json()) as {
+          edit?: { status?: WikiProposalToolOutput["status"]; inserted_text?: string };
+        };
+        if (!response.ok || cancelled) return;
+
+        const nextState = stateForStatus(payload.edit?.status);
+        setState(nextState);
+        if (payload.edit?.inserted_text && nextState === "draft") {
+          setDraft(payload.edit.inserted_text);
+        }
+      } catch {
+        // Keep the persisted chat output visible if the status refresh is unavailable.
+      }
+    }
+
+    void refreshProposalState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [output.edit_id, state]);
 
   if (!output.proposed || !output.edit_id) {
     return (
@@ -57,11 +91,14 @@ export function WikiProposalCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      const payload = (await response.json()) as { error?: string };
+      const payload = (await response.json()) as {
+        edit?: { status?: WikiProposalToolOutput["status"] };
+        error?: string;
+      };
       if (!response.ok) {
         throw new Error(payload.error ?? "Failed to resolve memory proposal.");
       }
-      setState(action === "accept" ? "saved" : "discarded");
+      setState(stateForStatus(payload.edit?.status ?? (action === "accept" ? "accepted" : "rejected")));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to resolve memory proposal.");
     } finally {

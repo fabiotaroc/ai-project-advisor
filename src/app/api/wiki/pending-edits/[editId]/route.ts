@@ -1,10 +1,34 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { acceptPendingEdit, rejectPendingEdit } from "@/lib/server/wiki-edits";
+import {
+  acceptPendingEdit,
+  getPendingEditForCurrentUser,
+  rejectPendingEdit,
+} from "@/lib/server/wiki-edits";
 
 const paramsSchema = z.object({ editId: z.string().uuid() });
 const bodySchema = z.object({ action: z.enum(["accept", "reject"]) });
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ editId: string }> },
+) {
+  const parsedParams = paramsSchema.safeParse(await params);
+  if (!parsedParams.success) {
+    return NextResponse.json({ error: "Invalid editId" }, { status: 400 });
+  }
+
+  try {
+    const edit = await getPendingEditForCurrentUser(parsedParams.data.editId);
+    return NextResponse.json({ edit });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed to load pending edit." },
+      { status: 400 },
+    );
+  }
+}
 
 export async function POST(
   request: Request,

@@ -124,6 +124,17 @@ export async function listPendingEditsForSource(
   return groupEdits(((data ?? []) as unknown as PendingEditRow[]).map(mapPendingEdit));
 }
 
+export async function getPendingEditForCurrentUser(editId: string): Promise<PendingWikiEdit> {
+  const edit = await getPendingEditForResolve(editId);
+  const user = await getOptionalSessionUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const access = await getProjectAccessForUser(user.id, edit.project_id);
+  if (!access) throw new Error("Forbidden");
+
+  return edit;
+}
+
 export async function acceptPendingEdit(editId: string): Promise<PendingWikiEdit> {
   const { userId } = await requireWriteAccessForEdit(editId);
   const edit = await getPendingEditForResolve(editId);
