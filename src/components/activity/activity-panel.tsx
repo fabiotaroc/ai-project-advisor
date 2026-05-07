@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronRight, FileText, Lightbulb, Upload } from "lucide-react";
+import { ChevronRight, Lightbulb } from "lucide-react";
 import type {
   ActivityEvent,
   LibrarianAction,
@@ -54,7 +54,6 @@ export function ActivityPanel({
   const eventParam = searchParams.get("event");
 
   const relatedEventsByRun = groupLibrarianEvents(activity.events);
-  const genericEvents = activity.events.filter((event) => !isGroupedLibrarianEvent(event));
 
   const timelineItems = useMemo<TimelineItem[]>(() => {
     const generic = activity.events.filter((event) => !isGroupedLibrarianEvent(event));
@@ -81,6 +80,7 @@ export function ActivityPanel({
 
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
   const [dayExpanded, setDayExpanded] = useState<Record<string, boolean>>({});
+  const [appliedTargetKey, setAppliedTargetKey] = useState<string | null>(null);
   const rowRefs = useRef(new Map<string, HTMLElement>());
 
   const registerRow = useCallback((key: string, element: HTMLElement | null) => {
@@ -100,34 +100,44 @@ export function ActivityPanel({
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }, [eventParam, pathname, router, runParam, searchParams]);
 
-  useEffect(() => {
-    if (!runParam && !eventParam) return;
+  const targetKey = useMemo(() => {
+    if (!runParam && !eventParam) return null;
 
-    let key: string | null = null;
     if (runParam && activity.librarianRuns.some((run) => run.id === runParam)) {
-      key = `librarian-${runParam}`;
-    } else if (eventParam) {
-      const event = activity.events.find((candidate) => candidate.id === eventParam);
-      if (event) {
-        if (isGroupedLibrarianEvent(event)) {
-          const runId = runIdForEvent(event);
-          if (runId && activity.librarianRuns.some((run) => run.id === runId)) {
-            key = `librarian-${runId}`;
-          }
-        } else {
-          key = `event-${eventParam}`;
-        }
-      }
+      return `librarian-${runParam}`;
     }
 
-    if (key) {
-      setHighlightedKey(key);
-      const dayKey = findGroupKeyForRow(groups, key);
-      if (dayKey) {
-        setDayExpanded((prev) => ({ ...prev, [dayKey]: true }));
-      }
+    if (!eventParam) return null;
+    const event = activity.events.find((candidate) => candidate.id === eventParam);
+    if (!event) return null;
+
+    if (isGroupedLibrarianEvent(event)) {
+      const runId = runIdForEvent(event);
+      return runId && activity.librarianRuns.some((run) => run.id === runId)
+        ? `librarian-${runId}`
+        : null;
+    }
+
+    return `event-${eventParam}`;
+  }, [activity.events, activity.librarianRuns, eventParam, runParam]);
+
+  if (targetKey && appliedTargetKey !== targetKey) {
+    setAppliedTargetKey(targetKey);
+    setHighlightedKey(targetKey);
+    const dayKey = findGroupKeyForRow(groups, targetKey);
+    if (dayKey) {
+      setDayExpanded((prev) => ({ ...prev, [dayKey]: true }));
+    }
+  }
+
+  useEffect(() => {
+    if (!targetKey) {
+      if (runParam || eventParam) clearActivityParams();
+      return;
+    }
+
       const scrollToTarget = () => {
-        const target = rowRefs.current.get(key);
+      const target = rowRefs.current.get(targetKey);
         if (target) {
           if (target instanceof HTMLDetailsElement) target.open = true;
           target.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -136,10 +146,9 @@ export function ActivityPanel({
       requestAnimationFrame(() => {
         requestAnimationFrame(scrollToTarget);
       });
-    }
 
     clearActivityParams();
-  }, [activity.events, activity.librarianRuns, clearActivityParams, eventParam, runParam, groups]);
+  }, [clearActivityParams, eventParam, runParam, targetKey]);
 
   const handleRowClick = useCallback((key: string) => {
     setHighlightedKey((current) => (current === key ? current : null));
@@ -627,16 +636,10 @@ function dayLabel(date: Date, now: Date) {
 }
 
 function subjectHrefFor(run: LibrarianRun, projectId: string): string | null {
-  if (run.trigger_type === "conversation_ended" && run.trigger_ref) {
-    return `/project/${projectId}/chat?c=${run.trigger_ref}`;
-  }
   if (run.trigger_type === "source_ingested") {
     return run.trigger_ref
       ? `/project/${projectId}/sources?source=${encodeURIComponent(run.trigger_ref)}`
       : `/project/${projectId}/sources`;
-  }
-  if (run.trigger_type === "wiki_lint") {
-    return `/project/${projectId}/files`;
   }
   return null;
 }
@@ -647,13 +650,16 @@ function eventHrefFor(event: ActivityEvent, projectId: string): string | null {
       ? `/project/${projectId}/sources?source=${encodeURIComponent(event.target_id)}`
       : `/project/${projectId}/sources`;
   }
+  if (event.event_type === "librarian_pending_edits_extracted") {
+    return event.target_id
+      ? `/project/${projectId}/sources?source=${encodeURIComponent(event.target_id)}`
+      : `/project/${projectId}/sources`;
+  }
   if (
-    event.event_type === "agent_file_edit" ||
-    event.event_type === "agent_file_rename" ||
-    event.event_type === "agent_file_delete" ||
-    event.event_type === "file_edited"
+    event.event_type === "wiki_edit_accepted" ||
+    event.event_type === "wiki_edit_rejected"
   ) {
-    return `/project/${projectId}/files`;
+    return `/project/${projectId}/wiki`;
   }
   if (event.event_type === "advisor_suggestion") {
     return event.target_id

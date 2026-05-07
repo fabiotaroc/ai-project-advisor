@@ -7,6 +7,8 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
@@ -46,7 +48,66 @@ export type Database = {
           target_id?: string | null
           target_type?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "activity_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      canonical_docs: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          is_default: boolean
+          is_pinned: boolean
+          project_id: string
+          slug: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          is_pinned?: boolean
+          project_id: string
+          slug: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          is_pinned?: boolean
+          project_id?: string
+          slug?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "canonical_docs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       chats: {
         Row: {
@@ -70,7 +131,94 @@ export type Database = {
           title?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "conversations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      librarian_runs: {
+        Row: {
+          action_count: number
+          actions: Json
+          actor_id: string | null
+          error: string | null
+          files_touched: string[]
+          finished_at: string | null
+          id: string
+          mode: string
+          project_id: string
+          started_at: string
+          status: string
+          suggestion_count: number
+          suggestions: Json
+          summary: string | null
+          trigger_ref: string | null
+          trigger_type: string
+        }
+        Insert: {
+          action_count?: number
+          actions?: Json
+          actor_id?: string | null
+          error?: string | null
+          files_touched?: string[]
+          finished_at?: string | null
+          id?: string
+          mode?: string
+          project_id: string
+          started_at?: string
+          status?: string
+          suggestion_count?: number
+          suggestions?: Json
+          summary?: string | null
+          trigger_ref?: string | null
+          trigger_type: string
+        }
+        Update: {
+          action_count?: number
+          actions?: Json
+          actor_id?: string | null
+          error?: string | null
+          files_touched?: string[]
+          finished_at?: string | null
+          id?: string
+          mode?: string
+          project_id?: string
+          started_at?: string
+          status?: string
+          suggestion_count?: number
+          suggestions?: Json
+          summary?: string | null
+          trigger_ref?: string | null
+          trigger_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "librarian_runs_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "librarian_runs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       messages: {
         Row: {
@@ -100,7 +248,111 @@ export type Database = {
           role?: string
           tool_calls?: Json | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "chats"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pending_wiki_edits: {
+        Row: {
+          anchor: Json
+          confidence: number | null
+          created_at: string
+          created_by: string | null
+          deleted_text: string | null
+          fallback_applied: boolean
+          id: string
+          inserted_text: string
+          origin: Database["public"]["Enums"]["pending_wiki_edit_origin"]
+          project_id: string
+          reason: string | null
+          repositioned: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          source_material_id: string | null
+          status: Database["public"]["Enums"]["pending_wiki_edit_status"]
+          target_doc_id: string
+        }
+        Insert: {
+          anchor?: Json
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          deleted_text?: string | null
+          fallback_applied?: boolean
+          id?: string
+          inserted_text?: string
+          origin: Database["public"]["Enums"]["pending_wiki_edit_origin"]
+          project_id: string
+          reason?: string | null
+          repositioned?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_material_id?: string | null
+          status?: Database["public"]["Enums"]["pending_wiki_edit_status"]
+          target_doc_id: string
+        }
+        Update: {
+          anchor?: Json
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          deleted_text?: string | null
+          fallback_applied?: boolean
+          id?: string
+          inserted_text?: string
+          origin?: Database["public"]["Enums"]["pending_wiki_edit_origin"]
+          project_id?: string
+          reason?: string | null
+          repositioned?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_material_id?: string | null
+          status?: Database["public"]["Enums"]["pending_wiki_edit_status"]
+          target_doc_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_wiki_edits_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_wiki_edits_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_wiki_edits_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_wiki_edits_source_material_id_fkey"
+            columns: ["source_material_id"]
+            isOneToOne: false
+            referencedRelation: "source_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_wiki_edits_target_doc_id_fkey"
+            columns: ["target_doc_id"]
+            isOneToOne: false
+            referencedRelation: "canonical_docs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -132,138 +384,6 @@ export type Database = {
           last_name?: string | null
           name?: string | null
           updated_at?: string
-        }
-        Relationships: []
-      }
-      project_file_versions: {
-        Row: {
-          content: string
-          created_at: string
-          edited_by: string | null
-          id: string
-          project_file_id: string
-          version: number
-        }
-        Insert: {
-          content: string
-          created_at?: string
-          edited_by?: string | null
-          id?: string
-          project_file_id: string
-          version: number
-        }
-        Update: {
-          content?: string
-          created_at?: string
-          edited_by?: string | null
-          id?: string
-          project_file_id?: string
-          version?: number
-        }
-        Relationships: []
-      }
-      project_files: {
-        Row: {
-          content: string
-          created_at: string
-          created_by_agent: boolean
-          deleted_at: string | null
-          id: string
-          is_source_of_truth: boolean
-          locked: boolean
-          path: string
-          pinned: boolean
-          project_id: string
-          updated_at: string
-          updated_by: string | null
-          visibility: string
-        }
-        Insert: {
-          content?: string
-          created_at?: string
-          created_by_agent?: boolean
-          deleted_at?: string | null
-          id?: string
-          is_source_of_truth?: boolean
-          locked?: boolean
-          path: string
-          pinned?: boolean
-          project_id: string
-          updated_at?: string
-          updated_by?: string | null
-          visibility?: string
-        }
-        Update: {
-          content?: string
-          created_at?: string
-          created_by_agent?: boolean
-          deleted_at?: string | null
-          id?: string
-          is_source_of_truth?: boolean
-          locked?: boolean
-          path?: string
-          pinned?: boolean
-          project_id?: string
-          updated_at?: string
-          updated_by?: string | null
-          visibility?: string
-        }
-        Relationships: []
-      }
-      librarian_runs: {
-        Row: {
-          action_count: number
-          actions: Json
-          actor_id: string | null
-          error: string | null
-          finished_at: string | null
-          files_touched: string[]
-          id: string
-          mode: string
-          project_id: string
-          started_at: string
-          status: string
-          suggestion_count: number
-          suggestions: Json
-          summary: string | null
-          trigger_ref: string | null
-          trigger_type: string
-        }
-        Insert: {
-          action_count?: number
-          actions?: Json
-          actor_id?: string | null
-          error?: string | null
-          finished_at?: string | null
-          files_touched?: string[]
-          id?: string
-          mode?: string
-          project_id: string
-          started_at?: string
-          status?: string
-          suggestion_count?: number
-          suggestions?: Json
-          summary?: string | null
-          trigger_ref?: string | null
-          trigger_type: string
-        }
-        Update: {
-          action_count?: number
-          actions?: Json
-          actor_id?: string | null
-          error?: string | null
-          finished_at?: string | null
-          files_touched?: string[]
-          id?: string
-          mode?: string
-          project_id?: string
-          started_at?: string
-          status?: string
-          suggestion_count?: number
-          suggestions?: Json
-          summary?: string | null
-          trigger_ref?: string | null
-          trigger_type?: string
         }
         Relationships: []
       }
@@ -301,7 +421,22 @@ export type Database = {
           role?: string
           status?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "project_invites_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_invites_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       project_members: {
         Row: {
@@ -322,7 +457,22 @@ export type Database = {
           role?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "project_members_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       project_settings: {
         Row: {
@@ -373,31 +523,53 @@ export type Database = {
           updated_at?: string
           verbosity?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "project_settings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       projects: {
         Row: {
           created_at: string
+          description: string
           id: string
+          logo_url: string | null
           name: string
           owner_id: string
           updated_at: string
         }
         Insert: {
           created_at?: string
+          description?: string
           id?: string
+          logo_url?: string | null
           name: string
           owner_id: string
           updated_at?: string
         }
         Update: {
           created_at?: string
+          description?: string
           id?: string
+          logo_url?: string | null
           name?: string
           owner_id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "projects_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       source_chunks: {
         Row: {
@@ -433,7 +605,15 @@ export type Database = {
           metadata?: Json
           source_material_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "source_chunks_source_material_id_fkey"
+            columns: ["source_material_id"]
+            isOneToOne: false
+            referencedRelation: "source_materials"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       source_email_details: {
         Row: {
@@ -487,7 +667,15 @@ export type Database = {
           to_addresses?: Json
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "source_email_details_source_material_id_fkey"
+            columns: ["source_material_id"]
+            isOneToOne: true
+            referencedRelation: "source_materials"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       source_file_details: {
         Row: {
@@ -544,7 +732,15 @@ export type Database = {
           updated_at?: string
           word_count?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "source_file_details_source_material_id_fkey"
+            columns: ["source_material_id"]
+            isOneToOne: true
+            referencedRelation: "source_materials"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       source_materials: {
         Row: {
@@ -592,7 +788,22 @@ export type Database = {
           updated_at?: string
           uploaded_by?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "source_materials_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "source_materials_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       source_meeting_details: {
         Row: {
@@ -631,13 +842,28 @@ export type Database = {
           source_material_id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "source_meeting_details_source_material_id_fkey"
+            columns: ["source_material_id"]
+            isOneToOne: true
+            referencedRelation: "source_materials"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      chat_last_message_times: {
+        Args: { p_conversation_ids: string[] }
+        Returns: {
+          conversation_id: string
+          last_message_at: string
+        }[]
+      }
       match_source_chunks: {
         Args: {
           p_match_count?: number
@@ -645,8 +871,8 @@ export type Database = {
           p_query_embedding: string
         }
         Returns: {
-          char_end: number | null
-          char_start: number | null
+          char_end: number
+          char_start: number
           chunk_id: string
           content: string
           similarity: number
@@ -663,16 +889,20 @@ export type Database = {
           p_semantic_pool?: number
         }
         Returns: {
-          char_end: number | null
-          char_start: number | null
+          char_end: number
+          char_start: number
           chunk_id: string
           content: string
-          lexical_rank: number | null
+          lexical_rank: number
           match_kind: string
-          semantic_similarity: number | null
+          semantic_similarity: number
           similarity: number
           source_material_id: string
         }[]
+      }
+      seed_default_canonical_docs: {
+        Args: { p_project_id: string }
+        Returns: undefined
       }
       user_has_project_access: {
         Args: { p_project_id: string }
@@ -684,10 +914,137 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      pending_wiki_edit_origin: "ingestion" | "chat"
+      pending_wiki_edit_status: "pending" | "accepted" | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
     }
   }
 }
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {
+      pending_wiki_edit_origin: ["ingestion", "chat"],
+      pending_wiki_edit_status: ["pending", "accepted", "rejected"],
+    },
+  },
+} as const

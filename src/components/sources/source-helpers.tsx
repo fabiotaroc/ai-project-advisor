@@ -1,4 +1,4 @@
-import { FileSpreadsheet, FileText, Mail, Presentation, Users } from "lucide-react";
+import { ArchiveRestore, FileSpreadsheet, FileText, Mail, Presentation, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getFileExtension } from "@/lib/source-classification";
@@ -42,6 +42,8 @@ export function sourceTypeIcon(type: SourceMaterial["type"], className?: string)
       return <Users className={cls} />;
     case "note":
       return <FileText className={cls} />;
+    case "migration":
+      return <ArchiveRestore className={cls} />;
   }
 }
 
@@ -82,6 +84,8 @@ export function typeLabel(type: SourceMaterial["type"]): string {
       return "Meeting";
     case "note":
       return "Note";
+    case "migration":
+      return "Migration";
   }
 }
 

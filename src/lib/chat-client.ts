@@ -51,29 +51,6 @@ export async function renameProjectConversation(conversationId: string, title: s
   return (await response.json()) as CreatedConversation;
 }
 
-export async function triggerConversationMemory(
-  projectId: string,
-  conversationId: string,
-) {
-  fetch(`/api/projects/${projectId}/librarian`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ trigger: "conversation", conversationId }),
-  }).catch(() => {});
-}
-
-export async function triggerWikiLint(projectId: string, focus?: string) {
-  const response = await fetch(`/api/projects/${projectId}/librarian`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ trigger: "lint", ...(focus ? { focus } : {}) }),
-  });
-  if (!response.ok) {
-    throw new Error(await getResponseError(response, "Failed to run the wiki lint."));
-  }
-  return response.json();
-}
-
 export async function deleteProjectConversation(conversationId: string) {
   const response = await fetch(`/api/chat/conversations/${conversationId}`, {
     method: "DELETE",

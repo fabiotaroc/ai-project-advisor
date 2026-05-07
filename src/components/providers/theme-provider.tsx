@@ -144,7 +144,7 @@ export function useTheme() {
   if (!ctx) {
     return {
       theme: undefined as Theme | undefined,
-      setTheme: (_: Theme) => {},
+      setTheme: () => {},
       resolvedTheme: undefined as ResolvedTheme | undefined,
       themes: ["light", "dark", "system"] as Theme[],
     };

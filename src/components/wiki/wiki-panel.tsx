@@ -2,340 +2,110 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Bot,
-  Eye,
-  EyeOff,
-  Loader2,
-  Lock,
-  LockOpen,
-  Pin,
-  PinOff,
-  ShieldCheck,
-  ShieldOff,
-  Sparkles,
-  User,
-} from "lucide-react";
+import { BookText, Loader2, Pin, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
-import type { ProjectFile } from "@/lib/types";
+import type { CanonicalDoc } from "@/lib/types";
 
-function FileMetaBadges({
-  file,
-  onPrimary = false,
-}: {
-  file: ProjectFile;
-  onPrimary?: boolean;
-}) {
-  const onPrimaryClass =
-    "border-primary-foreground/35 bg-primary-foreground/15 text-primary-foreground [&>svg]:opacity-90";
-
-  return (
-    <div className="flex flex-wrap items-center gap-1">
-      {file.pinned && (
-        <Badge
-          variant="secondary"
-          className={cn("gap-1 text-[10px]", onPrimary && onPrimaryClass)}
-        >
-          <Pin className="size-2.5" />
-          Pinned
-        </Badge>
-      )}
-      {file.is_source_of_truth && (
-        <Badge
-          variant="outline"
-          className={cn(
-            "gap-1 text-[10px]",
-            onPrimary
-              ? onPrimaryClass
-              : "border-chart-1/30 bg-chart-1/8 text-chart-1",
-          )}
-        >
-          <ShieldCheck className="size-2.5" />
-          Source of truth
-        </Badge>
-      )}
-      {file.locked && (
-        <Badge
-          variant="outline"
-          className={cn("gap-1 text-[10px]", onPrimary && onPrimaryClass)}
-        >
-          <Lock className="size-2.5" />
-          Locked
-        </Badge>
-      )}
-      {file.created_by_agent && (
-        <Badge
-          variant="secondary"
-          className={cn("gap-1 text-[10px]", onPrimary && onPrimaryClass)}
-        >
-          <Bot className="size-2.5" />
-          Agent
-        </Badge>
-      )}
-    </div>
-  );
-}
-
-function FileControlButtons({
-  file,
-  onToggle,
-}: {
-  file: ProjectFile;
-  onToggle: (id: string, field: string, value: boolean) => void;
-}) {
-  const controls = [
-    {
-      field: "pinned",
-      active: file.pinned,
-      iconOn: PinOff,
-      iconOff: Pin,
-      tipOn: "Unpin",
-      tipOff: "Pin",
-    },
-    {
-      field: "is_source_of_truth",
-      active: file.is_source_of_truth,
-      iconOn: ShieldOff,
-      iconOff: ShieldCheck,
-      tipOn: "Remove authority",
-      tipOff: "Mark as source of truth",
-    },
-    {
-      field: "locked",
-      active: file.locked,
-      iconOn: LockOpen,
-      iconOff: Lock,
-      tipOn: "Unlock",
-      tipOff: "Lock",
-    },
-    {
-      field: "visibility",
-      active: file.visibility === "internal",
-      iconOn: Eye,
-      iconOff: EyeOff,
-      tipOn: "Make surfaced",
-      tipOff: "Make internal",
-    },
-  ] as const;
-
-  return (
-    <TooltipProvider delayDuration={300}>
-      <div className="flex items-center gap-0.5">
-        {controls.map(({ field, active, iconOn: IconOn, iconOff: IconOff, tipOn, tipOff }) => {
-          const Icon = active ? IconOn : IconOff;
-          const tip = active ? tipOn : tipOff;
-          return (
-            <Tooltip key={field}>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  onClick={() => {
-                    if (field === "visibility") {
-                      onToggle(file.id, field, !active);
-                    } else {
-                      onToggle(file.id, field, !active);
-                    }
-                  }}
-                >
-                  <Icon className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="text-xs">
-                {tip}
-              </TooltipContent>
-            </Tooltip>
-          );
-        })}
-      </div>
-    </TooltipProvider>
-  );
-}
-
-type LintStatus =
-  | { kind: "idle" }
-  | { kind: "running" }
-  | { kind: "done"; summary: string | null; actions: number; suggestions: number }
-  | { kind: "error"; message: string };
+type SaveState = "idle" | "saving" | "saved" | "error";
 
 export function WikiPanel({
   projectId,
-  files: initialFiles,
+  docs: initialDocs,
 }: {
   projectId: string;
-  files: ProjectFile[];
+  docs: CanonicalDoc[];
 }) {
   const router = useRouter();
-  const [files, setFiles] = useState(initialFiles);
-  const [selectedPath, setSelectedPath] = useState(initialFiles[0]?.path ?? "PROJECT.md");
-  const [content, setContent] = useState(initialFiles[0]?.content ?? "");
-  const [lintStatus, setLintStatus] = useState<LintStatus>({ kind: "idle" });
+  const [docs, setDocs] = useState(initialDocs);
+  const [selectedId, setSelectedId] = useState<string | null>(initialDocs[0]?.id ?? null);
+  const [draftBody, setDraftBody] = useState(initialDocs[0]?.body ?? "");
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [pinDialogOpen, setPinDialogOpen] = useState(false);
 
   useEffect(() => {
-    setFiles(initialFiles);
-  }, [initialFiles]);
+    setDocs(initialDocs);
+  }, [initialDocs]);
 
-  async function runWikiLint() {
-    if (lintStatus.kind === "running") return;
-    setLintStatus({ kind: "running" });
+  const selected = useMemo(
+    () => docs.find((d) => d.id === selectedId) ?? null,
+    [docs, selectedId],
+  );
+
+  useEffect(() => {
+    setDraftBody(selected?.body ?? "");
+    setSaveState("idle");
+    setErrorMessage(null);
+  }, [selected?.id, selected?.body]);
+
+  const dirty = selected ? draftBody !== selected.body : false;
+
+  async function saveDoc() {
+    if (!selected || !dirty || saveState === "saving") return;
+    setSaveState("saving");
+    setErrorMessage(null);
     try {
-      const response = await fetch(`/api/projects/${projectId}/librarian`, {
-        method: "POST",
+      const response = await fetch(`/api/canonical-docs/${selected.id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trigger: "lint" }),
+        body: JSON.stringify({ body: draftBody }),
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        setLintStatus({
-          kind: "error",
-          message: payload?.error ?? `Request failed (${response.status})`,
-        });
-        return;
+        throw new Error(payload?.error ?? `Save failed (${response.status})`);
       }
-      const payload = (await response.json()) as {
-        run?: {
-          status: "succeeded" | "failed" | "skipped";
-          summary: string | null;
-          actions: unknown[];
-          suggestions: unknown[];
-          error?: string;
-        };
-      };
-      const run = payload.run;
-      if (!run) {
-        setLintStatus({ kind: "error", message: "Empty response from Librarian." });
-        return;
-      }
-      if (run.status === "failed") {
-        setLintStatus({
-          kind: "error",
-          message: run.error ?? "Librarian run failed.",
-        });
-        return;
-      }
-
-      setLintStatus({
-        kind: "done",
-        summary: run.summary,
-        actions: run.actions?.length ?? 0,
-        suggestions: run.suggestions?.length ?? 0,
-      });
-
+      const payload = (await response.json()) as { doc: CanonicalDoc };
+      setDocs((prev) => prev.map((d) => (d.id === payload.doc.id ? payload.doc : d)));
+      setSaveState("saved");
       router.refresh();
     } catch (err) {
-      setLintStatus({
-        kind: "error",
-        message: err instanceof Error ? err.message : "Unknown error",
-      });
+      setSaveState("error");
+      setErrorMessage(err instanceof Error ? err.message : "Unknown error");
     }
   }
 
-  const surfacedFiles = useMemo(
-    () => files.filter((f) => f.visibility === "surfaced"),
-    [files],
-  );
+  async function unpinDoc(doc: CanonicalDoc) {
+    if (doc.is_default) return;
+    if (!confirm(`Remove the pinned doc "${doc.title}"? Its content will be discarded.`)) return;
 
-  const selected = useMemo(
-    () => files.find((f) => f.path === selectedPath),
-    [files, selectedPath],
-  );
-
-  async function saveFile() {
-    const response = await fetch("/api/files", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, path: selectedPath, content }),
-    });
-    if (!response.ok) return;
-    const payload = await response.json();
-    setFiles((prev) =>
-      [...prev.filter((f) => f.path !== payload.file.path), payload.file].sort((a, b) =>
-        a.path.localeCompare(b.path),
-      ),
-    );
-  }
-
-  async function toggleFileMeta(fileId: string, field: string, value: boolean) {
-    const file = files.find((f) => f.id === fileId);
-    if (!file) return;
-
-    const updatePayload: Record<string, unknown> = {};
-    if (field === "visibility") {
-      updatePayload.visibility = value ? "internal" : "surfaced";
-    } else {
-      updatePayload[field] = value;
-    }
-
-    const optimistic = files.map((f) =>
-      f.id === fileId
-        ? {
-            ...f,
-            ...(field === "visibility"
-              ? { visibility: (value ? "internal" : "surfaced") as "surfaced" | "internal" }
-              : { [field]: value }),
-          }
-        : f,
-    );
-    setFiles(optimistic);
-
-    const response = await fetch("/api/files/meta", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, fileId, ...updatePayload }),
-    });
+    const response = await fetch(`/api/canonical-docs/${doc.id}`, { method: "DELETE" });
     if (!response.ok) {
-      setFiles(files);
+      const payload = await response.json().catch(() => ({}));
+      alert(payload?.error ?? "Failed to remove doc");
+      return;
     }
+    setDocs((prev) => prev.filter((d) => d.id !== doc.id));
+    if (selectedId === doc.id) {
+      const next = docs.find((d) => d.id !== doc.id) ?? null;
+      setSelectedId(next?.id ?? null);
+    }
+    router.refresh();
   }
 
-  function renderFileList(fileList: ProjectFile[]) {
-    return (
-      <ul className="flex flex-col gap-0.5">
-        {fileList.map((file) => (
-          <li key={file.id}>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedPath(file.path);
-                setContent(file.content);
-              }}
-              className={cn(
-                "flex w-full flex-col gap-1 rounded-md px-2.5 py-2 text-left transition-colors",
-                selectedPath === file.path
-                  ? "bg-primary text-primary-foreground"
-                  : "hover:bg-accent",
-              )}
-            >
-              <div className="flex items-center gap-2">
-                {file.created_by_agent ? (
-                  <Bot className="size-3 shrink-0 opacity-50" />
-                ) : (
-                  <User className="size-3 shrink-0 opacity-50" />
-                )}
-                <span className="truncate font-mono text-xs font-medium">{file.path}</span>
-              </div>
-              <FileMetaBadges file={file} onPrimary={selectedPath === file.path} />
-            </button>
-          </li>
-        ))}
-      </ul>
-    );
+  function onPinned(doc: CanonicalDoc) {
+    setDocs((prev) => [...prev, doc]);
+    setSelectedId(doc.id);
+    setPinDialogOpen(false);
+    router.refresh();
   }
+
+  const defaults = useMemo(() => docs.filter((d) => d.is_default), [docs]);
+  const customs = useMemo(() => docs.filter((d) => !d.is_default), [docs]);
 
   return (
     <section className="grid h-[calc(100vh-8rem)] grid-cols-[18rem_1fr] gap-3">
@@ -343,127 +113,303 @@ export function WikiPanel({
         <CardHeader className="shrink-0 gap-2 px-3 pt-3 pb-0">
           <div className="flex items-center justify-between gap-2">
             <CardTitle className="text-sm font-semibold">Wiki</CardTitle>
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 gap-1.5 px-2 text-xs"
-                    onClick={runWikiLint}
-                    disabled={lintStatus.kind === "running"}
-                  >
-                    {lintStatus.kind === "running" ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <Sparkles className="size-3.5" />
-                    )}
-                    {lintStatus.kind === "running" ? "Curating…" : "Curate"}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-[15rem] text-xs">
-                  Runs the Librarian over every file to check for stale content,
-                  contradictions, orphans, missing pages, and index gaps.
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          {lintStatus.kind !== "idle" && (
-            <div
-              className={cn(
-                "rounded-md border px-2 py-1.5 text-[11px] leading-snug",
-                lintStatus.kind === "error"
-                  ? "border-destructive/30 bg-destructive/5 text-destructive"
-                  : "border-border bg-muted/40 text-muted-foreground",
-              )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1.5 px-2 text-xs"
+              onClick={() => setPinDialogOpen(true)}
             >
-              {lintStatus.kind === "running" && (
-                <span>Librarian is reviewing the wiki — usually under a minute.</span>
-              )}
-              {lintStatus.kind === "done" && (
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-foreground">
-                    {lintStatus.actions} change
-                    {lintStatus.actions === 1 ? "" : "s"}, {lintStatus.suggestions} suggestion
-                    {lintStatus.suggestions === 1 ? "" : "s"}.
-                  </span>
-                  {lintStatus.summary && (
-                    <span className="line-clamp-3">{lintStatus.summary}</span>
-                  )}
-                </div>
-              )}
-              {lintStatus.kind === "error" && <span>Lint failed: {lintStatus.message}</span>}
-            </div>
-          )}
+              <Plus className="size-3.5" />
+              Pin custom
+            </Button>
+          </div>
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            Five canonical docs are seeded for every project. Pin custom docs to extend.
+          </p>
         </CardHeader>
-        <CardContent className="min-h-0 flex-1 overflow-hidden px-3 pt-2 pb-3">
-          <Tabs defaultValue="surfaced" className="flex h-full flex-col">
-            <TabsList className="w-full shrink-0">
-              <TabsTrigger value="surfaced" className="flex-1 text-xs">
-                Artifacts
-              </TabsTrigger>
-              <TabsTrigger value="all" className="flex-1 text-xs">
-                All files
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="surfaced" className="mt-2 min-h-0 flex-1 overflow-y-auto">
-              {renderFileList(surfacedFiles)}
-            </TabsContent>
-            <TabsContent value="all" className="mt-2 min-h-0 flex-1 overflow-y-auto">
-              {renderFileList(files)}
-            </TabsContent>
-          </Tabs>
+        <CardContent className="min-h-0 flex-1 overflow-y-auto px-2 pt-2 pb-3">
+          <DocList
+            heading="Canonical"
+            docs={defaults}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
+          {customs.length > 0 && (
+            <DocList
+              heading="Pinned"
+              docs={customs}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              className="mt-3"
+            />
+          )}
         </CardContent>
       </Card>
 
       <Card className="flex min-h-0 flex-col py-0">
         <CardHeader className="shrink-0 border-b border-border px-4 py-2.5">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <CardTitle className="font-mono text-xs font-medium">{selectedPath}</CardTitle>
+              <CardTitle className="text-sm font-semibold">{selected?.title ?? "—"}</CardTitle>
               {selected ? (
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Updated {formatDateTime(selected.updated_at)}
+                <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                  {selected.slug}.md · updated {formatDateTime(selected.updated_at)}
                 </p>
               ) : null}
             </div>
             {selected ? (
-              <FileControlButtons file={selected} onToggle={toggleFileMeta} />
+              <div className="flex items-center gap-1.5">
+                {selected.is_default ? (
+                  <Badge variant="secondary" className="gap-1 text-[10px]">
+                    <BookText className="size-2.5" />
+                    Default
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="gap-1 text-[10px]">
+                    <Pin className="size-2.5" />
+                    Pinned
+                  </Badge>
+                )}
+                {!selected.is_default && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-7"
+                    onClick={() => unpinDoc(selected)}
+                    aria-label="Remove pinned doc"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                )}
+              </div>
             ) : null}
           </div>
-          {selected ? (
-            <div className="mt-1.5">
-              <FileMetaBadges file={selected} />
-            </div>
-          ) : null}
         </CardHeader>
         <CardContent className="flex min-h-0 flex-1 overflow-hidden px-0 py-0">
-          <div className="flex min-h-0 w-full flex-1 overflow-hidden">
-            <Label htmlFor="file-content" className="sr-only">
-              File content
-            </Label>
-            <Textarea
-              id="file-content"
-              value={content}
-              onChange={(event) => setContent(event.target.value)}
-              disabled={selected?.locked}
-              className="field-sizing-fixed h-full min-h-0 flex-1 overflow-y-auto rounded-none border-0 bg-transparent p-4 font-mono text-sm leading-relaxed shadow-none focus-visible:ring-0"
-            />
-          </div>
+          <Label htmlFor="canonical-doc-body" className="sr-only">
+            Doc content
+          </Label>
+          <Textarea
+            id="canonical-doc-body"
+            value={draftBody}
+            onChange={(event) => {
+              setDraftBody(event.target.value);
+              setSaveState("idle");
+            }}
+            placeholder={selected ? "Write in markdown…" : "Select a doc to edit."}
+            disabled={!selected}
+            className="field-sizing-fixed h-full min-h-0 flex-1 overflow-y-auto rounded-none border-0 bg-transparent p-4 font-mono text-sm leading-relaxed shadow-none focus-visible:ring-0"
+          />
         </CardContent>
-        <CardFooter className="shrink-0 justify-end gap-2 px-4 py-2.5">
-          {selected?.locked && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Lock className="size-3" />
-              This file is locked
-            </span>
-          )}
-          <Button type="button" onClick={saveFile} disabled={selected?.locked}>
-            Save + version
+        <CardFooter className="shrink-0 items-center justify-between gap-2 px-4 py-2.5">
+          <div className="text-xs text-muted-foreground">
+            {saveState === "saving" && (
+              <span className="inline-flex items-center gap-1">
+                <Loader2 className="size-3 animate-spin" /> Saving…
+              </span>
+            )}
+            {saveState === "saved" && !dirty && <span>Saved.</span>}
+            {saveState === "error" && (
+              <span className="text-destructive">{errorMessage ?? "Save failed."}</span>
+            )}
+            {saveState === "idle" && dirty && <span>Unsaved changes.</span>}
+          </div>
+          <Button
+            type="button"
+            onClick={saveDoc}
+            disabled={!selected || !dirty || saveState === "saving"}
+          >
+            Save
           </Button>
         </CardFooter>
       </Card>
+
+      <PinCustomDocDialog
+        open={pinDialogOpen}
+        onOpenChange={setPinDialogOpen}
+        projectId={projectId}
+        existingSlugs={docs.map((d) => d.slug)}
+        onPinned={onPinned}
+      />
     </section>
+  );
+}
+
+function DocList({
+  heading,
+  docs,
+  selectedId,
+  onSelect,
+  className,
+}: {
+  heading: string;
+  docs: CanonicalDoc[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex flex-col gap-1", className)}>
+      <p className="px-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        {heading}
+      </p>
+      <ul className="flex flex-col gap-0.5">
+        {docs.map((doc) => (
+          <li key={doc.id}>
+            <button
+              type="button"
+              onClick={() => onSelect(doc.id)}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-colors",
+                selectedId === doc.id
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-accent",
+              )}
+            >
+              {doc.is_default ? (
+                <BookText className="size-3 shrink-0 opacity-60" />
+              ) : (
+                <Pin className="size-3 shrink-0 opacity-60" />
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-xs font-medium">{doc.title}</div>
+                <div
+                  className={cn(
+                    "truncate font-mono text-[10px]",
+                    selectedId === doc.id
+                      ? "text-primary-foreground/70"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {doc.slug}.md
+                </div>
+              </div>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function PinCustomDocDialog({
+  open,
+  onOpenChange,
+  projectId,
+  existingSlugs,
+  onPinned,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  projectId: string;
+  existingSlugs: string[];
+  onPinned: (doc: CanonicalDoc) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [slug, setSlug] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setTitle("");
+      setSlug("");
+      setError(null);
+      setSubmitting(false);
+    }
+  }, [open]);
+
+  function deriveSlug(value: string): string {
+    return value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
+  async function submit() {
+    setError(null);
+    const cleanedSlug = deriveSlug(slug || title);
+    if (!cleanedSlug || !title.trim()) {
+      setError("Title and slug are required.");
+      return;
+    }
+    if (existingSlugs.includes(cleanedSlug)) {
+      setError(`Slug "${cleanedSlug}" is already in use.`);
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/canonical-docs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, slug: cleanedSlug, title: title.trim() }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error ?? `Pin failed (${response.status})`);
+      }
+      const payload = (await response.json()) as { doc: CanonicalDoc };
+      onPinned(payload.doc);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Pin custom doc</DialogTitle>
+          <DialogDescription>
+            Add a project-specific canonical doc alongside the five defaults.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="pin-doc-title">Title</Label>
+            <Input
+              id="pin-doc-title"
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (!slug) setSlug(deriveSlug(e.target.value));
+              }}
+              placeholder="Bill of Materials"
+              autoFocus
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="pin-doc-slug">Slug</Label>
+            <Input
+              id="pin-doc-slug"
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              placeholder="bom"
+              className="font-mono text-sm"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Lowercase letters, numbers, and dashes.
+            </p>
+          </div>
+          {error && <p className="text-xs text-destructive">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={submitting}
+          >
+            Cancel
+          </Button>
+          <Button type="button" onClick={submit} disabled={submitting}>
+            {submitting ? <Loader2 className="size-3.5 animate-spin" /> : "Pin"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

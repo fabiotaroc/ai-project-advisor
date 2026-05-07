@@ -49,7 +49,7 @@ import {
   parseRunSummary,
   subjectLabel,
 } from "@/components/activity/activity-shared";
-import type { SourceLinkedActivity, SourceLinkedRun } from "@/lib/types";
+import type { PendingWikiEdit, SourceLinkedActivity, SourceLinkedRun } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,7 +62,9 @@ import {
   sourceHasPreviewContent,
 } from "@/components/sources/cited-source-preview";
 import { SourceAddDialog } from "@/components/sources/source-add-dialog";
+import { ProposedChangesPanel } from "@/components/sources/proposed-changes-panel";
 import { SourceUploadZone, type SourceUploadStatus } from "@/components/sources/source-upload-zone";
+import { CanonicalDocDiffViewer } from "@/components/wiki/canonical-doc-diff-viewer";
 import {
   fileGlyph,
   formatBytes,
@@ -672,6 +674,22 @@ function SourceDetail({
   onDelete: (sourceId: string) => void;
   deletingSourceId: string | null;
 }) {
+  const [selectedEdit, setSelectedEdit] = useState<PendingWikiEdit | null>(null);
+  const [diffViewerOpen, setDiffViewerOpen] = useState(false);
+  const [pendingEditsRefreshKey, setPendingEditsRefreshKey] = useState(0);
+  const diffReturnFocusRef = useRef<HTMLElement | null>(null);
+
+  const handleSelectEdit = useCallback((edit: PendingWikiEdit) => {
+    diffReturnFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setSelectedEdit(edit);
+    setDiffViewerOpen(true);
+  }, []);
+
+  const refreshPendingEdits = useCallback(() => {
+    setPendingEditsRefreshKey((key) => key + 1);
+  }, []);
+
   if (!source) {
     return (
       <div className="flex h-full min-h-[12rem] items-center justify-center p-6 text-center text-sm text-muted-foreground lg:min-h-0">
@@ -769,6 +787,13 @@ function SourceDetail({
               ) : null}
             </div>
             <div className="flex min-h-0 w-full min-w-0 flex-col gap-3 lg:max-w-[15rem]">
+              <ProposedChangesPanel
+                sourceId={source.id}
+                className="max-h-[28rem] shrink-0"
+                refreshKey={pendingEditsRefreshKey}
+                onResolved={refreshPendingEdits}
+                onSelectEdit={handleSelectEdit}
+              />
               {view === "emails" && emailInsights ? (
                 <EmailMetaTable insights={emailInsights} />
               ) : null}
@@ -803,6 +828,13 @@ function SourceDetail({
             ) : null}
           </div>
           <div className="flex min-h-0 w-full min-w-0 flex-col gap-3 lg:max-w-[15rem]">
+            <ProposedChangesPanel
+              sourceId={source.id}
+              className="max-h-[28rem] shrink-0"
+              refreshKey={pendingEditsRefreshKey}
+              onResolved={refreshPendingEdits}
+              onSelectEdit={handleSelectEdit}
+            />
             <FileDetailsTable
               source={source}
               mimeType={mimeType}
@@ -813,6 +845,15 @@ function SourceDetail({
           </div>
         </div>
       )}
+      <CanonicalDocDiffViewer
+        sourceId={source.id}
+        selectedEdit={selectedEdit}
+        open={diffViewerOpen}
+        refreshKey={pendingEditsRefreshKey}
+        onOpenChange={setDiffViewerOpen}
+        onResolved={refreshPendingEdits}
+        returnFocusRef={diffReturnFocusRef}
+      />
     </div>
   );
 }

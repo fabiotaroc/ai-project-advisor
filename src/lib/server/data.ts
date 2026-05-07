@@ -11,7 +11,6 @@ import type {
   LibrarianRun,
   LibrarianSuggestion,
   ProjectActivity,
-  ProjectFile,
   ProjectRole,
   ProjectSettings,
   ProjectSummary,
@@ -178,21 +177,6 @@ export async function getProjectForUser(projectId: string) {
 
 export async function getProject(projectId: string) {
   return getProjectForUser(projectId);
-}
-
-export async function getProjectFiles(projectId: string) {
-  await getProjectForUser(projectId);
-
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("project_files")
-    .select("*")
-    .eq("project_id", projectId)
-    .is("deleted_at", null)
-    .order("path", { ascending: true });
-
-  if (error) throw error;
-  return (data ?? []) as ProjectFile[];
 }
 
 export async function getSources(
@@ -533,14 +517,8 @@ function normalizeSuggestions(value: unknown): LibrarianSuggestion[] {
 }
 
 function asTriggerType(value: unknown): LibrarianRun["trigger_type"] {
-  if (
-    value === "source_ingested" ||
-    value === "conversation_ended" ||
-    value === "wiki_lint"
-  ) {
-    return value;
-  }
-  return "wiki_lint";
+  if (value === "source_ingested") return value;
+  return "source_ingested";
 }
 
 function asMode(value: unknown): LibrarianRun["mode"] {

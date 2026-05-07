@@ -10,6 +10,7 @@ export function inputViewForSourceType(type: SourceMaterial["type"]): InputView 
       return "emails";
     case "document":
     case "note":
+    case "migration":
       return "files";
   }
 }
