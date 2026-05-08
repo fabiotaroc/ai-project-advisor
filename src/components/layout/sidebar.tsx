@@ -7,7 +7,6 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   Activity,
   BookOpen,
-  ChevronRight,
   ChevronsUpDown,
   House,
   Library,
@@ -621,7 +620,7 @@ export function ProjectSidebar({
                         {userEmail ?? "Signed in"}
                       </span>
                     </span>
-                    <ChevronRight className="ml-auto size-4 shrink-0 text-muted-foreground group-data-[collapsible=icon]:hidden" />
+                    <Settings className="ml-auto size-4 shrink-0 text-muted-foreground group-data-[collapsible=icon]:hidden" />
                   </SidebarMenuButton>
                 </DialogTrigger>
                 <DialogContent

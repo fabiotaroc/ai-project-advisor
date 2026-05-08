@@ -31,14 +31,7 @@ export default async function ProjectLayout({
   const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
 
   return (
-    <SidebarProvider
-      defaultOpen={defaultOpen}
-      className="contents"
-      style={{
-        "--sidebar-width": "18rem",
-        "--sidebar-width-icon": "3.5rem",
-      } as React.CSSProperties}
-    >
+    <SidebarProvider defaultOpen={defaultOpen} className="contents">
       <main className="flex min-h-svh w-full flex-1">
         <SidebarTrigger className="fixed left-3 top-3 z-30 border border-border/70 bg-card/90 shadow-[var(--shadow-2)] supports-[backdrop-filter]:bg-card/75 supports-[backdrop-filter]:backdrop-blur md:hidden" />
         <ProjectSidebar
