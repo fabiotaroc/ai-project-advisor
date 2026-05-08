@@ -13,7 +13,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -26,10 +25,7 @@ const DEFAULTS: ProjectSettings = {
   tone: "conversational",
   verbosity: "standard",
   default_format: "prose",
-  proactivity: "suggestive",
   language: "English",
-  auto_synthesize_on_ingest: true,
-  auto_create_entity_pages: true,
   created_at: "",
   updated_at: "",
 };
@@ -67,28 +63,6 @@ function SelectField({
           ))}
         </SelectContent>
       </Select>
-    </div>
-  );
-}
-
-function SwitchField({
-  label,
-  description,
-  checked,
-  onCheckedChange,
-}: {
-  label: string;
-  description: string;
-  checked: boolean;
-  onCheckedChange: (v: boolean) => void;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-8">
-      <div className="min-w-0 flex-1">
-        <Label className="text-sm font-medium">{label}</Label>
-        <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
-      </div>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} className="shrink-0" />
     </div>
   );
 }
@@ -134,14 +108,11 @@ export function SettingsPanel({
         tone: settings.tone,
         verbosity: settings.verbosity,
         default_format: settings.default_format,
-        proactivity: settings.proactivity,
         language: settings.language,
         client_name: settings.client_name,
         team_name: settings.team_name,
         project_phase: settings.project_phase,
         additional_context: settings.additional_context,
-        auto_synthesize_on_ingest: settings.auto_synthesize_on_ingest,
-        auto_create_entity_pages: settings.auto_create_entity_pages,
       };
       const response = await fetch(`/api/projects/${projectId}/settings`, {
         method: "PATCH",
@@ -183,7 +154,6 @@ export function SettingsPanel({
         <TabsList className="w-full justify-start">
           <TabsTrigger value="interaction">Interaction</TabsTrigger>
           <TabsTrigger value="context">Project Context</TabsTrigger>
-          <TabsTrigger value="permissions">Agent Permissions</TabsTrigger>
           <TabsTrigger value="members">Members</TabsTrigger>
           <TabsTrigger value="templates">Output Templates</TabsTrigger>
         </TabsList>
@@ -230,20 +200,6 @@ export function SettingsPanel({
                 ]}
                 onValueChange={(v) =>
                   update("default_format", v as ProjectSettings["default_format"])
-                }
-              />
-              <Separator />
-              <SelectField
-                label="Proactivity"
-                description="Whether Morgan suggests changes on their own or waits to be asked."
-                value={settings.proactivity}
-                options={[
-                  { value: "reactive", label: "Reactive — only when asked" },
-                  { value: "suggestive", label: "Suggestive — proposes, waits for approval" },
-                  { value: "proactive", label: "Proactive — makes improvements automatically" },
-                ]}
-                onValueChange={(v) =>
-                  update("proactivity", v as ProjectSettings["proactivity"])
                 }
               />
               <Separator />
@@ -312,32 +268,6 @@ export function SettingsPanel({
                   onChange={(e) => update("additional_context", e.target.value)}
                 />
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="permissions" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Agent Permissions</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Control what Morgan does automatically versus with your approval.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <SwitchField
-                label="Auto-synthesize on ingest"
-                description="When new sources are uploaded, automatically create and update wiki pages."
-                checked={settings.auto_synthesize_on_ingest}
-                onCheckedChange={(v) => update("auto_synthesize_on_ingest", v)}
-              />
-              <Separator />
-              <SwitchField
-                label="Auto-create entity pages"
-                description="Automatically create dedicated pages for recurring people, teams, and concepts."
-                checked={settings.auto_create_entity_pages}
-                onCheckedChange={(v) => update("auto_create_entity_pages", v)}
-              />
             </CardContent>
           </Card>
         </TabsContent>

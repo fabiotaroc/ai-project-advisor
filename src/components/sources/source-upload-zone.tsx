@@ -143,7 +143,7 @@ export function SourceUploadZone({
   }, [onStagedFilesChange]);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4">
       {/* Drop zone */}
       <button
         type="button"
@@ -188,7 +188,7 @@ export function SourceUploadZone({
 
       {/* Staged files */}
       {stagedFiles.length > 0 && (
-        <div className="flex flex-col gap-2">
+        <div className="flex min-w-0 flex-col gap-2">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-foreground">
               {stagedFiles.length} {stagedFiles.length === 1 ? "file" : "files"} ready
@@ -208,7 +208,7 @@ export function SourceUploadZone({
             </Button>
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex min-w-0 flex-col gap-1.5">
             {stagedFiles.map((staged) => {
               const uploadStatus = uploadProgress[staged.id];
 
@@ -216,7 +216,7 @@ export function SourceUploadZone({
                 <Card
                   key={staged.id}
                   size="sm"
-                  className="overflow-visible flex-row items-center gap-3 px-3 py-2.5"
+                  className="min-w-0 max-w-full overflow-visible flex-row items-center gap-3 px-3 py-2.5"
                 >
                   <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted">
                     {extIcon(staged.name)}

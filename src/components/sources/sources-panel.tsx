@@ -485,6 +485,7 @@ function SourceList({
             triggerLabel={viewConfig.addLabel}
             dialogTitle={viewConfig.addDialogTitle}
             dialogDescription={viewConfig.addDialogDescription}
+            allowPastedMeetingImport={view === "meetings"}
           />
         </div>
         <div className="relative">

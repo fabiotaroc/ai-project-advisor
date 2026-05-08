@@ -3,6 +3,7 @@ import "server-only";
 import { generateText } from "ai";
 import type { UIMessage } from "ai";
 import { openai } from "@ai-sdk/openai";
+import { CHAT_TITLE_SYSTEM_PROMPT } from "@/lib/server/prompts/chat-title";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 const TITLE_MODEL = "gpt-5.4-mini" as const;
@@ -59,10 +60,7 @@ export async function generateChatTitleFromUserMessageText(userText: string): Pr
 
   const { text } = await generateText({
     model: openai(TITLE_MODEL),
-    system:
-      "You label chat threads. Reply with a very short title (3–7 words) that captures the user's main topic or request. " +
-      "No quotes, colons, or trailing punctuation. No emojis. Use plain language, sentence case. " +
-      "If the text is a greeting or empty noise, use a generic label like 'Chat'.",
+    system: CHAT_TITLE_SYSTEM_PROMPT,
     prompt: `User message (may be long):\n\n${snippet}`,
     maxOutputTokens: 48,
   });

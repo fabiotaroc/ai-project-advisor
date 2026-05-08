@@ -11,10 +11,7 @@ export type ProjectSettings = {
   tone: "formal" | "conversational" | "neutral";
   verbosity: "concise" | "standard" | "detailed";
   default_format: "prose" | "bullets" | "tables" | "structured";
-  proactivity: "reactive" | "suggestive" | "proactive";
   language: string;
-  auto_synthesize_on_ingest: boolean;
-  auto_create_entity_pages: boolean;
   client_name?: string;
   team_name?: string;
   project_phase?: string;

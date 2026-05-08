@@ -477,13 +477,10 @@ export type Database = {
       project_settings: {
         Row: {
           additional_context: string | null
-          auto_create_entity_pages: boolean
-          auto_synthesize_on_ingest: boolean
           client_name: string | null
           created_at: string
           default_format: string
           language: string
-          proactivity: string
           project_id: string
           project_phase: string | null
           team_name: string | null
@@ -493,13 +490,10 @@ export type Database = {
         }
         Insert: {
           additional_context?: string | null
-          auto_create_entity_pages?: boolean
-          auto_synthesize_on_ingest?: boolean
           client_name?: string | null
           created_at?: string
           default_format?: string
           language?: string
-          proactivity?: string
           project_id: string
           project_phase?: string | null
           team_name?: string | null
@@ -509,13 +503,10 @@ export type Database = {
         }
         Update: {
           additional_context?: string | null
-          auto_create_entity_pages?: boolean
-          auto_synthesize_on_ingest?: boolean
           client_name?: string | null
           created_at?: string
           default_format?: string
           language?: string
-          proactivity?: string
           project_id?: string
           project_phase?: string | null
           team_name?: string | null

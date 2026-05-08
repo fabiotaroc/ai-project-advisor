@@ -1,8 +1,14 @@
 import "server-only";
 
-import { generateObject } from "ai";
+import { Output, generateText } from "ai";
 import { openai, type OpenAILanguageModelResponsesOptions } from "@ai-sdk/openai";
-import { z } from "zod";
+import {
+  LIBRARIAN_PENDING_EDITS_SYSTEM_PROMPT,
+  buildLibrarianPendingEditsUserPrompt,
+  librarianPendingEditsResponseSchema,
+  type LibrarianPendingEditCandidate,
+} from "@/lib/server/prompts/librarian-pending-edits";
+import { formatCanonicalDocsForPrompt } from "@/lib/server/prompts/canonical-docs";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   DEFAULT_CANONICAL_DOC_SLUGS,
@@ -12,41 +18,6 @@ import {
 const EXTRACTION_MODEL = "gpt-5.4";
 const NON_MEETING_CONFIDENCE_THRESHOLD = 0.7;
 const MAX_INSERTED_TEXT_CHARS = 800;
-
-const candidateSchema = z.object({
-  target_doc_slug: z.string().describe(
-    "Slug of the canonical doc this update targets. Must be one of the slugs from the available docs.",
-  ),
-  anchor_heading: z
-    .string()
-    .nullable()
-    .describe("The markdown heading the inserted text belongs under, if any. Null if appending to top-level."),
-  anchor_before: z
-    .string()
-    .nullable()
-    .describe("Up to 120 chars of text expected to appear immediately BEFORE the insertion point. Null if appending to end of section."),
-  anchor_after: z
-    .string()
-    .nullable()
-    .describe("Up to 120 chars of text expected to appear immediately AFTER the insertion point. Null if appending to end of section."),
-  inserted_text: z
-    .string()
-    .describe("The markdown text to insert. Append-only — never include deletions or rewrites."),
-  reason: z
-    .string()
-    .describe("One sentence explaining why this update is appropriate based on the source."),
-  confidence: z
-    .number()
-    .min(0)
-    .max(1)
-    .describe("Confidence that this update is worth proposing, 0..1."),
-});
-
-const extractionResponseSchema = z.object({
-  candidates: z.array(candidateSchema),
-});
-
-type ExtractionCandidate = z.infer<typeof candidateSchema>;
 
 export type PendingEditRow = {
   id: string;
@@ -93,62 +64,22 @@ export async function extractPendingEditsFromSource({
   }
   const docBySlug = new Map(docs.map((d) => [String(d.slug), d]));
 
-  const docCatalog = docs
-    .map((d) => {
-      const headingPreview = String(d.body ?? "")
-        .split("\n")
-        .filter((line) => line.startsWith("#"))
-        .slice(0, 6)
-        .join("\n");
-      return [
-        `## ${d.slug} — ${d.title}`,
-        d.is_default ? "(default)" : "(pinned)",
-        headingPreview ? `Existing headings:\n${headingPreview}` : "Empty.",
-      ].join("\n");
-    })
-    .join("\n\n");
+  const docCatalog = formatCanonicalDocsForPrompt(docs);
 
-  const systemPrompt = [
-    "You extract structured, append-only proposals from a single ingested source into a fixed set of canonical project docs.",
-    "Your output is reviewed by a human before any doc is touched. Be precise, be conservative.",
-    "",
-    "Rules:",
-    "- Only emit a candidate when the source genuinely warrants it. Empty output is a valid response.",
-    "- inserted_text must be a single self-contained markdown fragment — typically a bullet, a short paragraph, or a small list. No deletions, no rewrites of existing content.",
-    "- Always include a brief source citation in the inserted_text, formatted like ` (from \"<source title>\")`.",
-    "- Pick target_doc_slug from the list below. Do not invent new slugs.",
-    "- For meetings: extract decisions → decisions, action items / WIP / blockers → work, attendee role notes → people, defined terms → glossary.",
-    "- For email/file/note sources: extract only when the signal is clear (a stated decision, a clear ownership note, a new defined term). When in doubt, skip.",
-    "- confidence: 0.9+ only when the source explicitly states the fact; 0.5–0.8 when it's strongly implied; below 0.5 should usually not be emitted.",
-    "",
-    "Anchor rules:",
-    "- If a relevant existing heading is shown in 'Existing headings', set anchor_heading to that heading text (verbatim, including leading hashes).",
-    "- Otherwise leave anchor_heading null and the doc reviewer will pick a location.",
-    "- anchor_before / anchor_after are optional context strings to help repositioning if the doc has changed; use null if you don't have a specific neighboring sentence.",
-  ].join("\n");
-
-  const userPrompt = [
-    `Source type: ${sourceType}`,
-    `Source title: ${sourceTitle}`,
-    sourceSummary ? `Source summary: ${sourceSummary}` : null,
-    "",
-    "Available canonical docs:",
+  const userPrompt = buildLibrarianPendingEditsUserPrompt({
+    sourceType,
+    sourceTitle,
+    sourceSummary,
     docCatalog,
-    "",
-    "Source excerpt (parsed content, may be truncated):",
-    "```",
     sourceExcerpt,
-    "```",
-  ]
-    .filter((part): part is string => part !== null)
-    .join("\n");
+  });
 
-  let candidates: ExtractionCandidate[] = [];
+  let candidates: LibrarianPendingEditCandidate[] = [];
   try {
-    const { object } = await generateObject({
+    const { output } = await generateText({
       model: openai(EXTRACTION_MODEL),
-      schema: extractionResponseSchema,
-      system: systemPrompt,
+      output: Output.object({ schema: librarianPendingEditsResponseSchema }),
+      system: LIBRARIAN_PENDING_EDITS_SYSTEM_PROMPT,
       prompt: userPrompt,
       providerOptions: {
         openai: {
@@ -157,9 +88,9 @@ export async function extractPendingEditsFromSource({
         } satisfies OpenAILanguageModelResponsesOptions,
       },
     });
-    candidates = object.candidates;
+    candidates = output.candidates;
   } catch (err) {
-    console.error("extractPendingEditsFromSource generateObject failed", err);
+    console.error("extractPendingEditsFromSource generateText failed", err);
     throw err;
   }
 

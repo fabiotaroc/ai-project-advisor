@@ -23,6 +23,8 @@ type Props = {
   initialLastName: string | null;
   initialAvatarUrl: string | null;
   email: string;
+  /** Merged onto the root section (e.g. embedded in a popover). */
+  className?: string;
 };
 
 type SaveState = "idle" | "saved" | "error";
@@ -62,6 +64,7 @@ export function AccountPanel({
   initialLastName,
   initialAvatarUrl,
   email,
+  className,
 }: Props) {
   const [firstName, setFirstName] = useState(initialFirstName ?? "");
   const [lastName, setLastName] = useState(initialLastName ?? "");
@@ -140,7 +143,7 @@ export function AccountPanel({
   }, []);
 
   return (
-    <section className="mx-auto max-w-2xl space-y-6">
+    <section className={cn("mx-auto max-w-2xl space-y-6", className)}>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold">Account</h1>

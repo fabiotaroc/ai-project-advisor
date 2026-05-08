@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
-import { AlertCircle, CheckCircle2, Loader2, Plus, Upload, UploadCloud } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clipboard, Loader2, Plus, Upload, UploadCloud } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,14 +12,20 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { SourceUploadZone, type SourceUploadStatus } from "@/components/sources/source-upload-zone";
 import type { StagedFile } from "@/lib/source-classification";
 import type { SourceMaterialDetail } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type UploadPhase = "idle" | "uploading" | "success" | "failed";
+type ImportMode = "upload" | "paste";
 
 const SUCCESS_CLOSE_DELAY_MS = 950;
+const PASTED_MEETING_ID = "pasted-meeting";
 
 export function SourceAddDialog({
   projectId,
@@ -27,15 +33,20 @@ export function SourceAddDialog({
   triggerLabel = "Add source",
   dialogTitle = "Add source",
   dialogDescription = "Drop files to stage them. Categories are auto-detected, then you can adjust before uploading.",
+  allowPastedMeetingImport = false,
 }: {
   projectId: string;
   onSourceAdded: (source: SourceMaterialDetail) => void;
   triggerLabel?: string;
   dialogTitle?: string;
   dialogDescription?: string;
+  allowPastedMeetingImport?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [importMode, setImportMode] = useState<ImportMode>("upload");
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
+  const [pastedTitle, setPastedTitle] = useState("");
+  const [pastedText, setPastedText] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadPhase, setUploadPhase] = useState<UploadPhase>("idle");
   const [uploadProgress, setUploadProgress] = useState<Record<string, SourceUploadStatus>>({});
@@ -51,7 +62,10 @@ export function SourceAddDialog({
 
   const reset = useCallback(() => {
     clearCloseTimer();
+    setImportMode("upload");
     setStagedFiles([]);
+    setPastedTitle("");
+    setPastedText("");
     setUploadProgress({});
     setUploadPhase("idle");
     setFailureMessage(null);
@@ -61,16 +75,21 @@ export function SourceAddDialog({
 
   const uploadStats = useMemo(() => {
     const statuses = Object.values(uploadProgress);
+    const total =
+      statuses.length ||
+      (uploadPhase !== "idle" && importMode === "paste" ? 1 : stagedFiles.length);
     return {
       completed: statuses.filter((status) => status === "done").length,
       failed: statuses.filter((status) => status === "failed").length,
-      total: statuses.length || stagedFiles.length,
+      total,
       activeFileName:
-        stagedFiles.find((file) => uploadProgress[file.id] === "uploading")?.name ??
-        stagedFiles.find((file) => uploadProgress[file.id] === "pending")?.name ??
-        null,
+        uploadProgress[PASTED_MEETING_ID] === "uploading"
+          ? pastedTitle.trim() || "Pasted meeting"
+          : stagedFiles.find((file) => uploadProgress[file.id] === "uploading")?.name ??
+            stagedFiles.find((file) => uploadProgress[file.id] === "pending")?.name ??
+            null,
     };
-  }, [stagedFiles, uploadProgress]);
+  }, [importMode, pastedTitle, stagedFiles, uploadPhase, uploadProgress]);
 
   const handleStagedFilesChange = useCallback((next: SetStateAction<StagedFile[]>) => {
     setStagedFiles(next);
@@ -153,8 +172,63 @@ export function SourceAddDialog({
     }
   }, [clearCloseTimer, stagedFiles, isUploading, projectId, onSourceAdded, reset]);
 
+  const importPastedMeeting = useCallback(async () => {
+    const title = pastedTitle.trim();
+    const text = pastedText.trim();
+    if (!title || !text || isUploading) return;
+
+    clearCloseTimer();
+    setIsUploading(true);
+    setUploadPhase("uploading");
+    setFailureMessage(null);
+    setUploadProgress({ [PASTED_MEETING_ID]: "uploading" });
+
+    try {
+      const file = new File([text], ensureTextFileName(title), { type: "text/plain" });
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", projectId);
+      formData.append("category", "meeting");
+
+      const response = await fetch("/api/sources/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        const { source } = (await response.json()) as { source: SourceMaterialDetail };
+        onSourceAdded(source);
+
+        if (source.status === "failed") {
+          setUploadProgress({ [PASTED_MEETING_ID]: "failed" });
+          setUploadPhase("failed");
+          setFailureMessage("The pasted meeting was saved, but processing needs attention.");
+        } else {
+          setUploadProgress({ [PASTED_MEETING_ID]: "done" });
+          setUploadPhase("success");
+          closeTimerRef.current = setTimeout(() => {
+            closeTimerRef.current = null;
+            setOpen(false);
+            reset();
+          }, SUCCESS_CLOSE_DELAY_MS);
+        }
+      } else {
+        setUploadProgress({ [PASTED_MEETING_ID]: "failed" });
+        setUploadPhase("failed");
+        setFailureMessage("The pasted meeting could not be imported. Please try again.");
+      }
+    } catch {
+      setUploadProgress({ [PASTED_MEETING_ID]: "failed" });
+      setUploadPhase("failed");
+      setFailureMessage("The pasted meeting could not be imported. Please try again.");
+    } finally {
+      setIsUploading(false);
+    }
+  }, [clearCloseTimer, isUploading, onSourceAdded, pastedText, pastedTitle, projectId, reset]);
+
   const isUploadLocked = isUploading || uploadPhase === "success";
   const showStatusPanel = uploadPhase !== "idle";
+  const canImportPastedMeeting = pastedTitle.trim().length > 0 && pastedText.trim().length > 0;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -181,7 +255,47 @@ export function SourceAddDialog({
           />
         )}
 
-        {!isUploadLocked && (
+        {!isUploadLocked && allowPastedMeetingImport && (
+          <Tabs
+            value={importMode}
+            onValueChange={(value) => {
+              setImportMode(value as ImportMode);
+              if (uploadPhase === "failed") {
+                setUploadProgress({});
+                setUploadPhase("idle");
+                setFailureMessage(null);
+              }
+            }}
+          >
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="upload">
+                <Upload data-icon="inline-start" />
+                Upload file
+              </TabsTrigger>
+              <TabsTrigger value="paste">
+                <Clipboard data-icon="inline-start" />
+                Paste text
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="upload" className="mt-2">
+              <SourceUploadZone
+                stagedFiles={stagedFiles}
+                onStagedFilesChange={handleStagedFilesChange}
+                uploadProgress={uploadProgress}
+              />
+            </TabsContent>
+            <TabsContent value="paste" className="mt-2">
+              <PastedMeetingForm
+                title={pastedTitle}
+                text={pastedText}
+                onTitleChange={setPastedTitle}
+                onTextChange={setPastedText}
+              />
+            </TabsContent>
+          </Tabs>
+        )}
+
+        {!isUploadLocked && !allowPastedMeetingImport && (
           <SourceUploadZone
             stagedFiles={stagedFiles}
             onStagedFilesChange={handleStagedFilesChange}
@@ -194,18 +308,86 @@ export function SourceAddDialog({
             <Button variant="ghost" onClick={() => handleOpenChange(false)}>
               Close
             </Button>
-            <Button onClick={uploadAll} disabled={stagedFiles.length === 0}>
+            <Button
+              onClick={importMode === "paste" ? importPastedMeeting : uploadAll}
+              disabled={importMode === "paste" ? !canImportPastedMeeting : stagedFiles.length === 0}
+            >
               <Upload data-icon="inline-start" />
-              {uploadPhase === "failed"
-                ? "Try again"
-                : stagedFiles.length === 0
-                  ? "Upload"
-                  : `Upload ${stagedFiles.length} file${stagedFiles.length !== 1 ? "s" : ""}`}
+              {getActionLabel({
+                importMode,
+                uploadPhase,
+                stagedCount: stagedFiles.length,
+              })}
             </Button>
           </DialogFooter>
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ensureTextFileName(title: string) {
+  const base = title
+    .trim()
+    .replace(/[^\w\s.-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+
+  return `${base || "pasted-meeting"}.txt`;
+}
+
+function getActionLabel({
+  importMode,
+  uploadPhase,
+  stagedCount,
+}: {
+  importMode: ImportMode;
+  uploadPhase: UploadPhase;
+  stagedCount: number;
+}) {
+  if (uploadPhase === "failed") return "Try again";
+  if (importMode === "paste") return "Import pasted meeting";
+  if (stagedCount === 0) return "Upload";
+  return `Upload ${stagedCount} file${stagedCount !== 1 ? "s" : ""}`;
+}
+
+function PastedMeetingForm({
+  title,
+  text,
+  onTitleChange,
+  onTextChange,
+}: {
+  title: string;
+  text: string;
+  onTitleChange: (value: string) => void;
+  onTextChange: (value: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4 rounded-xl border border-border bg-muted/20 p-4">
+      <div className="grid gap-2">
+        <Label htmlFor="pasted-meeting-title">Meeting title</Label>
+        <Input
+          id="pasted-meeting-title"
+          value={title}
+          onChange={(event) => onTitleChange(event.target.value)}
+          placeholder="e.g. Weekly client sync"
+        />
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="pasted-meeting-text">Transcript or notes</Label>
+        <Textarea
+          id="pasted-meeting-text"
+          value={text}
+          onChange={(event) => onTextChange(event.target.value)}
+          placeholder="Paste the meeting transcript, notes, or action-item recap..."
+          className="field-sizing-fixed h-64 max-h-[50vh] min-h-64 resize-y overflow-y-auto"
+        />
+        <p className="text-xs text-muted-foreground">
+          Pasted text is imported as a meeting transcript and processed like an uploaded text file.
+        </p>
+      </div>
+    </div>
   );
 }
 

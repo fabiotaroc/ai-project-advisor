@@ -1,9 +1,17 @@
 import "server-only";
 
-import { embed, generateObject, generateText } from "ai";
+import { Output, embed, generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
-import { z } from "zod";
 import { extractEmailText } from "@/lib/server/email-ingestion";
+import {
+  MEETING_EXTRACTION_SYSTEM_PROMPT,
+  SOURCE_SUMMARY_SYSTEM_PROMPT,
+  buildMeetingExtractionUserPrompt,
+  buildSourceSummaryUserPrompt,
+  meetingTranscriptExtractionSchema,
+  truncateMeetingTranscriptForPrompt,
+  type MeetingTranscriptExtraction,
+} from "@/lib/server/prompts/meeting-extraction";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SourceMaterial } from "@/lib/types";
 
@@ -95,29 +103,7 @@ export async function generateEmbeddings(chunks: string[]): Promise<number[][]> 
   return results;
 }
 
-/** Head-heavy cap: keeps VTT/SRT cue timestamps and file headers for datetime inference. */
-const MEETING_TRANSCRIPT_PROMPT_CHAR_CAP = 40_000;
-
-const meetingTranscriptExtractionSchema = z.object({
-  short_summary: z
-    .string()
-    .describe("Exactly two sentences summarizing what happened in the meeting."),
-  decisions: z.array(z.string()).describe("Concrete decisions or agreements."),
-  action_items: z.array(z.string()).describe("Tasks with owner or clear next step when stated."),
-  risks: z.array(z.string()).describe("Risks, concerns, or blockers discussed."),
-  open_questions: z.array(z.string()).describe("Unresolved questions or items needing follow-up."),
-  participants: z
-    .array(z.string())
-    .describe("Attendee names as in the transcript; add role in parentheses only if explicit."),
-  meeting_at: z
-    .string()
-    .nullable()
-    .describe(
-      "ISO-8601 datetime if clearly stated (title, headers, platform lines, or first VTT/SRT cue). Null if unknown or uncertain — never invent a date.",
-    ),
-});
-
-export type MeetingTranscriptExtraction = z.infer<typeof meetingTranscriptExtractionSchema>;
+export type { MeetingTranscriptExtraction };
 
 function normalizeStringList(value: string[]): string[] {
   const seen = new Set<string>();
@@ -140,38 +126,26 @@ function parseMeetingAtTimestamptz(iso: string | null | undefined): string | nul
   return new Date(ms).toISOString();
 }
 
-function truncateMeetingTranscriptForPrompt(text: string): string {
-  if (text.length <= MEETING_TRANSCRIPT_PROMPT_CHAR_CAP) return text;
-  return text.slice(0, MEETING_TRANSCRIPT_PROMPT_CHAR_CAP);
-}
-
 export async function extractMeetingTranscriptInsights(
   text: string,
   title: string,
 ): Promise<MeetingTranscriptExtraction> {
   const transcript = truncateMeetingTranscriptForPrompt(text);
 
-  const { object } = await generateObject({
+  const { output } = await generateText({
     model: openai("gpt-5.4-mini"),
-    schema: meetingTranscriptExtractionSchema,
-    system: `You extract structured meeting intelligence from transcripts (plain text, markdown, VTT, or SRT).
-Rules:
-- Use only what is supported by the transcript; do not invent facts, people, or dates.
-- Lists may be empty if nothing applies.
-- meeting_at: output a full ISO-8601 string only when the calendar wall time is explicit or unambiguous (e.g. meeting title line, "Date:", Zoom/Teams headers, first subtitle cue with a real date). Otherwise null.`,
-    prompt: `Meeting file name / title: ${title}
-
-Transcript (may be truncated from the start of the file):
-${transcript}`,
+    output: Output.object({ schema: meetingTranscriptExtractionSchema }),
+    system: MEETING_EXTRACTION_SYSTEM_PROMPT,
+    prompt: buildMeetingExtractionUserPrompt(title, transcript),
   });
 
   return {
-    ...object,
-    decisions: normalizeStringList(object.decisions),
-    action_items: normalizeStringList(object.action_items),
-    risks: normalizeStringList(object.risks),
-    open_questions: normalizeStringList(object.open_questions),
-    participants: normalizeStringList(object.participants),
+    ...output,
+    decisions: normalizeStringList(output.decisions),
+    action_items: normalizeStringList(output.action_items),
+    risks: normalizeStringList(output.risks),
+    open_questions: normalizeStringList(output.open_questions),
+    participants: normalizeStringList(output.participants),
   };
 }
 
@@ -183,9 +157,8 @@ export async function generateSourceSummary(
 
   const { text: summary } = await generateText({
     model: openai("gpt-5.4-mini"),
-    system:
-      "You are a concise summarizer. Produce a 2-4 sentence summary of the document. Focus on the key facts, decisions, and action items.",
-    prompt: `Document title: ${title}\n\n${snippet}`,
+    system: SOURCE_SUMMARY_SYSTEM_PROMPT,
+    prompt: buildSourceSummaryUserPrompt(title, snippet),
     maxOutputTokens: 300,
   });
 

@@ -37,8 +37,8 @@ export async function POST(request: Request) {
   const projectId = body.projectId;
   const canWrite = access.role !== "viewer";
   const userSupabase = await createSupabaseServerClient();
-  const { system, toolMode } = await assembleProjectSystemPrompt(projectId, user.id);
   const conversation = await getOrCreateProjectConversation(projectId, user.id, body.conversationId, body.messages);
+  const { system } = await assembleProjectSystemPrompt(projectId, user.id, conversation.id);
 
   const advisorRecord: LibrarianRunRecord = { suggestions: [] };
 
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
   const modelMessages = await convertToModelMessages(body.messages);
 
   const result = streamText({
-    model: openai("gpt-5.4"),
+    model: openai("gpt-5.5"),
     system,
     messages: modelMessages,
     abortSignal: request.signal,
@@ -68,7 +68,6 @@ export async function POST(request: Request) {
         projectId,
         userId: user.id,
         conversationId: conversation.id,
-        mode: toolMode,
         canWrite,
         userSupabase,
       },

@@ -107,15 +107,6 @@ function describeToolRow(
   const make = (label: string) => ({ label, isError: failed, isRunning: running });
 
   switch (toolName) {
-    case "list_canonical_docs":
-      if (failed) return make("Couldn't list project docs");
-      return make(running ? "Listing canonical docs..." : "Listed canonical docs");
-    case "read_canonical_doc": {
-      const slug = getStringProperty(input, "slug");
-      const target = truncate(slug || "doc", 48);
-      if (failed) return make(`Couldn't read ${target}`);
-      return make(running ? `Reading ${target}...` : `Read ${target}`);
-    }
     case "search_sources": {
       const q = query ? `'${truncate(query, 40)}'` : "sources";
       if (failed) return make(`Couldn't search ${q}`);
@@ -461,13 +452,6 @@ function getStreamingStatus(messages: UIMessage[], status: string) {
   const readSourceCount = runningTools.filter((part) => getToolName(part) === "read_source").length;
   if (readSourceCount > 0) {
     return `Reading ${readSourceCount} ${readSourceCount === 1 ? "source" : "sources"}...`;
-  }
-
-  const readDocCount = runningTools.filter(
-    (part) => getToolName(part) === "read_canonical_doc",
-  ).length;
-  if (readDocCount > 0) {
-    return `Reading ${readDocCount} canonical ${readDocCount === 1 ? "doc" : "docs"}...`;
   }
 
   if (runningTools.some((part) => getToolName(part) === "search_sources")) {

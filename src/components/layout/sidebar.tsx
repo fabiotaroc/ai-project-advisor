@@ -53,6 +53,15 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { AccountPanel } from "@/components/account/account-panel";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { formatChatListTime } from "@/lib/date-format";
 import type { ProjectConversationListItem } from "@/lib/types";
@@ -146,6 +155,7 @@ export function ProjectSidebar({
   const [draftTitle, setDraftTitle] = useState("");
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const navigationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -574,45 +584,65 @@ export function ProjectSidebar({
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                tooltip="Account settings"
-                size="lg"
-                className="h-11 rounded-md px-1.5 py-2 hover:bg-sidebar-accent group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-2"
-              >
-                <Link href="/account">
-                  <span className="relative flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-sidebar-border bg-background font-mono text-xs font-medium text-sidebar-foreground group-data-[collapsible=icon]:size-4 group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-transparent">
-                    {userAvatarUrl ? (
-                      <Image
-                        src={userAvatarUrl}
-                        alt=""
-                        fill
-                        sizes="28px"
-                        className="object-cover"
-                        unoptimized
-                      />
-                    ) : (
-                      getAccountInitial({
-                        firstName: userFirstName,
-                        lastName: userLastName,
-                        email: userEmail,
-                      })
-                    )}
-                  </span>
-                  <span className="flex min-w-0 flex-1 flex-col gap-0.5 pl-1 text-left group-data-[collapsible=icon]:hidden">
-                    <span className="truncate text-sm font-medium leading-none text-sidebar-foreground">
-                      {getAccountDisplayName({
-                        firstName: userFirstName,
-                        lastName: userLastName,
-                      })}
+              <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
+                <DialogTrigger asChild>
+                  <SidebarMenuButton
+                    type="button"
+                    size="lg"
+                    title="Account settings"
+                    className="h-11 rounded-md px-1.5 py-2 hover:bg-sidebar-accent group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-2"
+                  >
+                    <span className="relative flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-sidebar-border bg-background font-mono text-xs font-medium text-sidebar-foreground group-data-[collapsible=icon]:size-4 group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-transparent">
+                      {userAvatarUrl ? (
+                        <Image
+                          src={userAvatarUrl}
+                          alt=""
+                          fill
+                          sizes="28px"
+                          className="object-cover"
+                          unoptimized
+                        />
+                      ) : (
+                        getAccountInitial({
+                          firstName: userFirstName,
+                          lastName: userLastName,
+                          email: userEmail,
+                        })
+                      )}
                     </span>
-                    <span className="truncate text-[12px] leading-none text-muted-foreground">
-                      {userEmail ?? "Signed in"}
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5 pl-1 text-left group-data-[collapsible=icon]:hidden">
+                      <span className="truncate text-sm font-medium leading-none text-sidebar-foreground">
+                        {getAccountDisplayName({
+                          firstName: userFirstName,
+                          lastName: userLastName,
+                        })}
+                      </span>
+                      <span className="truncate text-[12px] leading-none text-muted-foreground">
+                        {userEmail ?? "Signed in"}
+                      </span>
                     </span>
-                  </span>
-                  <ChevronRight className="ml-auto size-4 shrink-0 text-muted-foreground group-data-[collapsible=icon]:hidden" />
-                </Link>
-              </SidebarMenuButton>
+                    <ChevronRight className="ml-auto size-4 shrink-0 text-muted-foreground group-data-[collapsible=icon]:hidden" />
+                  </SidebarMenuButton>
+                </DialogTrigger>
+                <DialogContent
+                  className="max-h-[85vh] gap-0 overflow-y-auto sm:max-w-xl"
+                  showCloseButton
+                >
+                  <DialogHeader className="sr-only">
+                    <DialogTitle>Account settings</DialogTitle>
+                    <DialogDescription>
+                      Update your profile, theme, and session for this workspace.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <AccountPanel
+                    email={userEmail ?? ""}
+                    initialFirstName={userFirstName}
+                    initialLastName={userLastName}
+                    initialAvatarUrl={userAvatarUrl}
+                    className="mx-0 max-w-none space-y-4 pr-8 pt-1"
+                  />
+                </DialogContent>
+              </Dialog>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>

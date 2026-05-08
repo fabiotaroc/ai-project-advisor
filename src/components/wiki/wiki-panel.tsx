@@ -121,12 +121,9 @@ export function WikiPanel({
               onClick={() => setPinDialogOpen(true)}
             >
               <Plus className="size-3.5" />
-              Pin custom
+              Custom doc
             </Button>
           </div>
-          <p className="text-[11px] leading-snug text-muted-foreground">
-            Five canonical docs are seeded for every project. Pin custom docs to extend.
-          </p>
         </CardHeader>
         <CardContent className="min-h-0 flex-1 overflow-y-auto px-2 pt-2 pb-3">
           <DocList

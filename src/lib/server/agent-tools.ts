@@ -6,21 +6,15 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
-import type { ProjectSettings } from "@/lib/types";
 import { buildSourceDisplayExcerpt } from "@/lib/server/source-snippets";
 
 type AnySupabase = SupabaseClient<Database>;
-
-export type AgentRunMode = "write" | "proposal";
-/** Alias kept for legacy callers; the librarian no longer runs an LLM tool loop. */
-export type LibrarianMode = AgentRunMode;
 
 export type AdvisorToolContext = {
   kind: "advisor";
   projectId: string;
   userId: string;
   conversationId: string;
-  mode: AgentRunMode;
   canWrite: boolean;
   userSupabase: AnySupabase;
 };
@@ -41,45 +35,6 @@ export type AdvisorSuggestion = {
 export type LibrarianRunRecord = {
   suggestions: AdvisorSuggestion[];
 };
-
-export function resolveAdvisorToolMode(settings: ProjectSettings | null): AgentRunMode {
-  if (settings?.proactivity === "reactive") return "proposal";
-  return "write";
-}
-
-function listCanonicalDocsTool(projectId: string, supabase: AnySupabase) {
-  return tool({
-    description:
-      "List the canonical project docs (the five defaults — project, decisions, people, work, glossary — plus any user-pinned custom docs). Use this at the start of a turn when you need to know which docs exist.",
-    inputSchema: z.object({}),
-    execute: async () => {
-      const { data, error } = await supabase
-        .from("canonical_docs")
-        .select("slug,title,is_default,is_pinned,updated_at")
-        .eq("project_id", projectId);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-}
-
-function readCanonicalDocTool(projectId: string, supabase: AnySupabase) {
-  return tool({
-    description:
-      "Read the full body of a canonical project doc by slug. Returns null if no doc with that slug exists in this project.",
-    inputSchema: z.object({ slug: z.string().min(1) }),
-    execute: async ({ slug }) => {
-      const { data, error } = await supabase
-        .from("canonical_docs")
-        .select("slug,title,body,is_default,is_pinned,updated_at")
-        .eq("project_id", projectId)
-        .eq("slug", slug.trim().toLowerCase())
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-  });
-}
 
 function searchSourcesTool(projectId: string, supabase: AnySupabase) {
   return tool({
@@ -282,16 +237,14 @@ function proposeWikiUpdateTool(ctx: AdvisorToolContext) {
 }
 
 /**
- * Tool surface for the advisor (chat). After §3, advisor reads canonical docs
- * and sources; wiki writes from chat are reviewable proposals only.
+ * Tool surface for the advisor (chat). Canonical docs are loaded into the
+ * advisor context; source reads and wiki writes stay tool-backed.
  */
 export function buildAgentTools(ctx: AgentToolContext, record: LibrarianRunRecord) {
   const admin = createSupabaseAdminClient();
   const sourceSupabase = ctx.userSupabase ?? admin;
 
   return {
-    list_canonical_docs: listCanonicalDocsTool(ctx.projectId, sourceSupabase),
-    read_canonical_doc: readCanonicalDocTool(ctx.projectId, sourceSupabase),
     search_sources: searchSourcesTool(ctx.projectId, sourceSupabase),
     read_source: readSourceTool(ctx.projectId, sourceSupabase),
     propose_wiki_update: proposeWikiUpdateTool(ctx),

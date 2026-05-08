@@ -2,8 +2,59 @@
 
 ## General guidelines
 
-Use `specflow` for every non trivial coding task. Within that workflow, use the approriate skills for the specifics Iterate with the user after every step, never complete the whole workflow yourself.
+Use `specflow` if the coding task is major and complex. Do not use `specflow` for minor fixes or refactorings. Within that workflow, use the approriate skills for the specifics Iterate with the user after every step, never complete the whole workflow yourself.
 You can find system specs in `flow/specs`. Start here when exploring the codebase for a problem.
+
+
+## Product Vision And Rules
+
+This product is an AI project workspace for project delivery teams, especially non-technical consultants, implementation teams, PMs, and operations leads who manage multiple client or internal projects across changing teams, meetings, documents, emails, and deliverables.
+
+The product should stay focused on this vertical niche. If it becomes a generic AI workspace, users will default back to ChatGPT or their existing tools. Its advantage comes from being purpose-built for consulting and implementation-style project work: repeated context switching, multiple parallel projects, handovers, client-facing outputs, decisions, action items, and long-running project memory.
+
+The long-term vision combines:
+- Notion-like collaboration: shared workspaces, structured knowledge, team-visible artifacts, and durable project memory.
+- Codex-like flow: seamless chat with an agent that can inspect, reason over, and edit project documents in the same workspace.
+- OpenClaw-like personalization: an intelligent assistant tailored to the user, team, project context, working style, and accumulated memory.
+- Office-style output creation: document workflows like Word first, with room later for PowerPoint, Excel, and other structured workplace outputs.
+
+The product should feel like:
+- a shared project brain
+- an AI project advisor / Project Management partner
+- a living wiki plus source library
+- a workspace that can help create practical deliverables
+
+It should not feel like:
+- a developer tool
+- a generic chatbot with uploads
+- a raw document repository with an AI wrapper
+- a filesystem users have to manage manually
+
+### Core Product Principles
+
+- Stay vertical: optimize for consulting and implementation teams managing many projects, not broad consumer or generic knowledge-work use cases.
+- Hide technical complexity by default. Users should see projects, chat, knowledge, inputs, outputs, and history, not prompts, chunks, or agent plumbing.
+- Preserve trust through source grounding, citations, activity history, reviewable changes, and clear authorship.
+- Keep raw inputs and synthesized knowledge conceptually separate: source materials are evidence; durable project memory is the evolving interpretation of that evidence.
+- Prefer useful artifacts over chat-only answers. The system should help produce decisions, action items, meeting recaps, handover notes, status updates, reports, and eventually office-style documents.
+- Give the user control over durable memory. The assistant can suggest and draft, but the product should make it clear what becomes persistent.
+- Build for messy real project delivery work: meetings, emails, docs, decks, notes, unclear ownership, repeated decisions, onboarding, handovers, and client-facing outputs.
+- Design for collaboration from the beginning: shared understanding, safe edits, ownership, and transparent change history matter more than solo productivity tricks.
+- Keep the user-facing experience calm and familiar, even if the underlying system is agentic and powerful.
+
+### Future Direction To Keep In Mind
+
+Plugins and integrations are strategically important. The product should eventually support ChatGPT-like connectors for workplace systems such as Outlook, Teams, calendar, SharePoint/cloud drives, meeting tools, and task systems, so the agent can understand and act across the user's real work context.
+
+Design choices should leave room for:
+- Word-like document drafting and editing
+- PowerPoint-style structured presentation generation
+- Excel/spreadsheet ingestion and analysis
+- Outlook/email and calendar connectors
+- Teams/chat connectors
+- meeting transcript and notes workflows
+- reusable templates for reports, handovers, status updates, and client-facing deliverables
+- modular skills/plugins without making the MVP feel over-engineered
 
 
 ## Coding guidelines
