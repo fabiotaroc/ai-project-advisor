@@ -6,26 +6,25 @@ import {
   lastAssistantMessageIsCompleteWithToolCalls,
   type UIMessage,
 } from "ai";
-import {
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  FilePenLine,
-  SendHorizontal,
-} from "lucide-react";
+import { ChevronDown, ExternalLink, SendHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   WikiProposalCard,
   type WikiProposalToolOutput,
 } from "@/components/chat/wiki-proposal-card";
-import type { ProjectConversationListItem } from "@/lib/types";
+import { CanonicalDocDiffViewer } from "@/components/wiki/canonical-doc-diff-viewer";
+import type { PendingWikiEdit, ProjectConversationListItem } from "@/lib/types";
 import {
   InputGroup,
   InputGroupAddon,
@@ -87,11 +86,6 @@ function getWikiProposalOutput(output: unknown): WikiProposalToolOutput | null {
   };
 }
 
-/**
- * Single source of truth for how each timeline row reads. Returns a
- * tense-aware verb phrase that shifts as the part transitions through
- * input-streaming → input-available → output-available / output-error.
- */
 function describeToolRow(
   toolName: string,
   state: string | undefined,
@@ -159,18 +153,7 @@ type ToolPartInfo = {
   errorText?: string;
 };
 
-type CitationRailItem = CitationItem & { title: string };
-
-type MemoryDraftItem = {
-  key: string;
-  path: string;
-  action: "Created" | "Updated";
-};
-
-type ConversationFact = {
-  label: string;
-  value: string;
-};
+type CitationInline = CitationItem & { title: string };
 
 type TracePart =
   | { kind: "reasoning"; key: string; text: string; isStreaming: boolean }
@@ -198,57 +181,78 @@ function StreamingDots() {
   );
 }
 
-function toCitationRailItem(citation: CitationItem): CitationRailItem {
+function toCitationInline(citation: CitationItem): CitationInline {
   return {
     ...citation,
     title: citation.sourceTitle,
-    excerpt: citation.excerpt ? truncate(citation.excerpt.replace(/\s+/g, " "), 132) : undefined,
+    excerpt: citation.excerpt ? truncate(citation.excerpt.replace(/\s+/g, " "), 220) : undefined,
   };
 }
 
-function getMessageCitations(message: UIMessage): CitationRailItem[] {
-  const metadata = getCitationMetadataFromMessageLike(message);
-  return (metadata?.items ?? []).map(toCitationRailItem);
-}
-
+/**
+ * Inline citation pill — hover/focus opens a popover with source title and
+ * excerpt, and a click-through to the source page. Replaces the previous
+ * persistent right-rail citations list.
+ */
 function CitationPill({
   citation,
   index,
   projectId,
-  onRailHighlight,
 }: {
-  citation: CitationRailItem;
+  citation: CitationInline;
   index: number;
   projectId: string;
-  onRailHighlight?: (citationKey: string | null) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const sourceHref = `/project/${projectId}/sources?source=${citation.sourceMaterialId}&chunk=${citation.chunkId}`;
+
   return (
-    <Link
-      href={`/project/${projectId}/sources?source=${citation.sourceMaterialId}&chunk=${citation.chunkId}`}
-      title={citation.title}
-      className={cn(
-        "relative top-px mx-0.5 inline-flex h-[18px] min-w-[18px] cursor-pointer items-center justify-center rounded-[5px] bg-cite-bg px-[5px] font-mono text-[11px] font-medium leading-none text-cite-fg no-underline",
-        "transition-[background,transform] duration-[120ms] [transition-timing-function:cubic-bezier(0.2,0.6,0.2,1)]",
-        "hover:bg-accent-soft-2 hover:-translate-y-px",
-        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
-      )}
-      onMouseEnter={() => onRailHighlight?.(citation.key)}
-      onMouseLeave={() => onRailHighlight?.(null)}
-      onFocus={() => onRailHighlight?.(citation.key)}
-      onBlur={() => onRailHighlight?.(null)}
-    >
-      {index + 1}
-    </Link>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Link
+          href={sourceHref}
+          title={citation.title}
+          onMouseEnter={() => setOpen(true)}
+          onMouseLeave={() => setOpen(false)}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+          className={cn(
+            "relative top-px mx-0.5 inline-flex h-[18px] min-w-[18px] cursor-pointer items-center justify-center rounded-[5px] bg-cite-bg px-[5px] font-mono text-[11px] font-medium leading-none text-cite-fg no-underline",
+            "transition-[background,transform] duration-[120ms] [transition-timing-function:cubic-bezier(0.2,0.6,0.2,1)]",
+            "hover:bg-accent-soft-2 hover:-translate-y-px",
+            "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+          )}
+        >
+          {index + 1}
+        </Link>
+      </PopoverTrigger>
+      <PopoverContent
+        align="center"
+        side="top"
+        sideOffset={8}
+        className="w-80"
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+      >
+        <div className="flex flex-col gap-1.5">
+          <p className="text-xs font-medium leading-5 text-foreground">{citation.title}</p>
+          {citation.excerpt ? (
+            <p className="text-[12px] leading-[1.55] text-muted-foreground">{citation.excerpt}</p>
+          ) : null}
+          <Link
+            href={sourceHref}
+            className="mt-0.5 inline-flex items-center gap-1 self-start font-mono text-[11px] text-primary hover:underline"
+          >
+            Open source <ExternalLink className="size-3" />
+          </Link>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
 type TimelineState = "running" | "done" | "error";
 
-/**
- * One row in the trace timeline. A small bullet on the left, a thin
- * connector line down to the next row when there is one, and the row's
- * content rendered to the right. Bullet color/animation reflects state.
- */
 function TimelineRow({
   state,
   showConnector,
@@ -270,8 +274,6 @@ function TimelineRow({
         aria-hidden
         className={cn(
           "mt-[5px] size-1.5 shrink-0 rounded-full",
-          // Active step: solid blue dot with a soft pulsing halo so the eye
-          // immediately lands on what the model is doing right now.
           state === "running" &&
             "animate-pulse bg-blue-500 shadow-[0_0_0_3px_rgba(59,130,246,0.18),0_0_8px_2px_rgba(59,130,246,0.55)]",
           state === "done" && "bg-accent-line",
@@ -310,11 +312,6 @@ function ToolRow({
   );
 }
 
-/**
- * Reasoning row: cycles thinking phrases while live, collapses to a
- * "Thought process" disclosure once the part finishes streaming. The body
- * is rendered as muted prose (not raw `<pre>`) so it doesn't shout.
- */
 function ReasoningRow({
   text,
   isStreaming,
@@ -368,14 +365,6 @@ function ReasoningRow({
   );
 }
 
-/**
- * Collapsible "Working… / Completed in N steps" wrapper around a trace
- * timeline. Auto-collapses once `shouldMinimize` flips true (i.e. text has
- * streamed in below it). Uses a latch so the end-of-stream re-render
- * doesn't pop it back open. Manual user toggle overrides the auto behavior.
- *
- * Adapted from `mike/frontend/src/app/components/shared/PreResponseWrapper.tsx`.
- */
 function PreResponseWrapper({
   children,
   stepCount,
@@ -387,17 +376,9 @@ function PreResponseWrapper({
   shouldMinimize: boolean;
   isStreaming: boolean;
 }) {
-  // Once the wrapper has *ever* been asked to minimize (i.e. text streamed
-  // in below), latch that so a later render where shouldMinimize flips back
-  // to false (e.g. end-of-stream reconcile) doesn't pop the wrapper open.
-  // The official React pattern for "store information from previous renders"
-  // is a guarded setState during render, which doesn't trigger an extra
-  // commit and is preferred over ref-mutation under the new react-hooks rules.
   const [hasMinimized, setHasMinimized] = useState(false);
   if (shouldMinimize && !hasMinimized) setHasMinimized(true);
 
-  // `userOpen` is the explicit user override; null means "follow auto".
-  // Deriving `isOpen` during render avoids a setState-in-effect cascade.
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const autoOpen = !shouldMinimize && !hasMinimized;
   const isOpen = userOpen ?? autoOpen;
@@ -430,14 +411,6 @@ function getToolName(part: ToolPartInfo) {
   return (part.toolName ?? part.type.replace(/^tool-/, "")) || "tool";
 }
 
-function extractToolParts(messages: UIMessage[]) {
-  return messages.flatMap((message) =>
-    message.parts
-      .filter(isToolPart)
-      .map((part) => part as ToolPartInfo)
-  );
-}
-
 function getStreamingStatus(messages: UIMessage[], status: string) {
   if (status === "submitted") return "Reading project context...";
 
@@ -462,215 +435,14 @@ function getStreamingStatus(messages: UIMessage[], status: string) {
   return "Reading project context...";
 }
 
-function buildRailData(messages: UIMessage[]) {
-  const toolParts = extractToolParts(messages);
-  const citationMap = new Map<string, CitationRailItem>();
-  const memoryMap = new Map<string, MemoryDraftItem>();
-
-  for (const message of messages) {
-    if (message.role !== "assistant") continue;
-    for (const part of message.parts) {
-      if (!isToolPart(part)) continue;
-      const toolPart = part as ToolPartInfo;
-      if (getToolName(toolPart) !== "propose_wiki_update") continue;
-      const proposal = getWikiProposalOutput(toolPart.output);
-      if (!proposal?.edit_id) continue;
-      memoryMap.set(proposal.edit_id, {
-        key: proposal.edit_id,
-        path: `${proposal.target_doc_slug ?? "wiki"}.md`,
-        action: proposal.status === "accepted" ? "Updated" : "Created",
-      });
-    }
-    for (const citation of getMessageCitations(message)) {
-      if (!citationMap.has(citation.key)) {
-        citationMap.set(citation.key, citation);
-      }
-    }
-  }
-
-  const assistantMessages = messages.filter((message) => message.role === "assistant").length;
-  const userMessages = messages.filter((message) => message.role === "user").length;
-  const facts: ConversationFact[] = [
-    { label: "Turns", value: `${userMessages} user · ${assistantMessages} Morgan` },
-    { label: "Tool traces", value: `${toolParts.length}` },
-    { label: "Sources referenced", value: `${citationMap.size}` },
-    { label: "Memory updates", value: `${memoryMap.size}` },
-  ];
-
-  return {
-    citations: Array.from(citationMap.values()),
-    memoryDrafts: Array.from(memoryMap.values()).slice(0, 8),
-    facts,
-  };
-}
-
-function chatCitationKeysMatch(a: string, b: string) {
-  return a.toLowerCase() === b.toLowerCase();
-}
-
-function ChatRail({
-  projectId,
-  citations,
-  memoryDrafts,
-  facts,
-  collapsed,
-  onToggle,
-  highlightedCitationKey,
-}: {
-  projectId: string;
-  citations: CitationRailItem[];
-  memoryDrafts: MemoryDraftItem[];
-  facts: ConversationFact[];
-  collapsed: boolean;
-  onToggle: () => void;
-  highlightedCitationKey: string | null;
-}) {
-  if (collapsed) {
-    return (
-      <aside className="hidden w-fit min-w-0 shrink-0 justify-self-start flex-col items-center gap-3 bg-background px-2 py-3 xl:flex xl:min-h-0">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="rounded-lg"
-          onClick={onToggle}
-          aria-label="Expand citations rail"
-        >
-          <ChevronLeft className="size-4" />
-        </Button>
-        <div className="flex flex-col items-center gap-2 text-center font-mono text-[11px] text-muted-foreground">
-          <span className="flex min-h-[18px] min-w-[18px] items-center justify-center rounded-[5px] bg-cite-bg px-1.5 font-medium text-cite-fg">
-            {citations.length}
-          </span>
-          <span className="flex size-7 items-center justify-center rounded-full border border-ai-line bg-ai-surface text-accent-ink">
-            {memoryDrafts.length}
-          </span>
-        </div>
-      </aside>
-    );
-  }
-
-  return (
-    <aside className="hidden min-h-0 w-full min-w-0 flex-col gap-3 overflow-y-auto bg-background px-3 py-5 xl:flex">
-      <section className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="px-1 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Citations</h2>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="rounded-md"
-            onClick={onToggle}
-            aria-label="Collapse citations rail"
-          >
-            <ChevronRight className="size-3" />
-          </Button>
-        </div>
-        {citations.length > 0 ? (
-          <ol className="space-y-2">
-            {citations.map((citation, index) => {
-              const isHighlighted =
-                highlightedCitationKey != null &&
-                chatCitationKeysMatch(citation.key, highlightedCitationKey);
-              return (
-                <li
-                  key={citation.key}
-                  className={cn(
-                    "rounded-lg border p-2.5 transition-[background,box-shadow,border-color] duration-150 [transition-timing-function:cubic-bezier(0.2,0.6,0.2,1)]",
-                    isHighlighted
-                      ? "border-accent-line bg-accent-soft/35 shadow-[0_0_0_1px_var(--accent-line),0_0_0_3px_var(--accent-soft-2)]"
-                      : "border-border/60 bg-background/70"
-                  )}
-                >
-                  <div className="flex items-start gap-2">
-                    <span
-                      className={cn(
-                        "flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-[5px] px-[5px] font-mono text-[11px] font-medium",
-                        isHighlighted ? "bg-accent-soft-2 text-accent-ink" : "bg-cite-bg text-cite-fg"
-                      )}
-                    >
-                      {index + 1}
-                    </span>
-                    <div className="min-w-0">
-                      <Link
-                        href={`/project/${projectId}/sources?source=${citation.sourceMaterialId}&chunk=${citation.chunkId}`}
-                        className="line-clamp-2 text-xs font-medium leading-5 text-foreground hover:text-primary"
-                      >
-                        {citation.title}
-                      </Link>
-                      {citation.excerpt ? (
-                        <p className="mt-1 line-clamp-3 text-[11px] leading-5 text-muted-foreground">
-                          {citation.excerpt}
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        ) : (
-          <p className="px-1 text-xs leading-5 text-muted-foreground">No source references in this chat yet.</p>
-        )}
-      </section>
-
-      <section className="space-y-2 border-t border-border/70 pt-3">
-        <h2 className="px-1 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Memory Drafts</h2>
-        {memoryDrafts.length > 0 ? (
-          <div className="space-y-2">
-            {memoryDrafts.map((draft) => (
-              <Link
-                key={draft.key}
-                href={`/project/${projectId}/wiki`}
-                className="block rounded-lg border border-ai-line bg-ai-surface p-2.5 transition-colors hover:border-accent-line"
-              >
-                <div className="flex items-center gap-2">
-                  <FilePenLine className="size-3.5 shrink-0 text-accent-ink" />
-                  <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground/80">
-                    {draft.path}
-                  </span>
-                  <Badge variant="accent" className="h-4 px-1.5 text-[10px]">
-                    {draft.action}
-                  </Badge>
-                </div>
-                <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-                  Captured from this conversation.
-                </p>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <p className="px-1 text-xs leading-5 text-muted-foreground">No memory updates proposed in this chat.</p>
-        )}
-      </section>
-
-      <section className="space-y-2 border-t border-border/70 pt-3">
-        <h2 className="px-1 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Conversation Facts</h2>
-        <dl className="space-y-1.5">
-          {facts.map((fact) => (
-            <div key={fact.label} className="flex items-center justify-between gap-3 px-1">
-              <dt className="text-xs text-muted-foreground">{fact.label}</dt>
-              <dd className="text-right font-mono text-[11px] text-foreground/75">{fact.value}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-    </aside>
-  );
-}
-
-/** Markdown body for a single text part. Extracted so it can sit between
- *  trace groups during interleaved rendering. */
 function AssistantTextPart({
   text,
   citationMetadata,
   projectId,
-  onCitationHighlight,
 }: {
   text: string;
   citationMetadata: ReturnType<typeof getCitationMetadataFromMessageLike>;
   projectId: string;
-  onCitationHighlight?: (citationKey: string | null) => void;
 }) {
   return (
     <div
@@ -710,10 +482,9 @@ function AssistantTextPart({
             if (citationRef?.citation) {
               return (
                 <CitationPill
-                  citation={toCitationRailItem(citationRef.citation)}
+                  citation={toCitationInline(citationRef.citation)}
                   index={citationRef.index}
                   projectId={projectId}
-                  onRailHighlight={onCitationHighlight}
                 />
               );
             }
@@ -740,18 +511,15 @@ function AssistantMessage({
   message,
   isStreaming,
   projectId,
-  onCitationHighlight,
+  onReviewProposal,
 }: {
   message: UIMessage;
   isStreaming: boolean;
   projectId: string;
-  onCitationHighlight?: (citationKey: string | null) => void;
+  onReviewProposal: (edit: PendingWikiEdit) => void;
 }) {
   const citationMetadata = getCitationMetadataFromMessageLike(message);
 
-  // Walk parts once and bucket consecutive trace items together. Each text
-  // part flushes the current bucket and emits its own group, so prose ends
-  // up between trace blocks rather than below a single fat trace card.
   const groups: AssistantGroup[] = [];
   let currentTrace: Extract<AssistantGroup, { kind: "trace" }> | null = null;
   const lastIndex = message.parts.length - 1;
@@ -835,19 +603,22 @@ function AssistantMessage({
               text={group.text}
               citationMetadata={citationMetadata}
               projectId={projectId}
-              onCitationHighlight={onCitationHighlight}
             />
           );
         }
 
         if (group.kind === "wiki-proposal") {
-          return <WikiProposalCard key={group.key} output={group.output} />;
+          return (
+            <WikiProposalCard
+              key={group.key}
+              output={group.output}
+              onReview={onReviewProposal}
+            />
+          );
         }
 
         if (group.items.length === 0) return null;
 
-        // Auto-collapse this trace once any later group emits prose. The
-        // PreResponseWrapper latches the minimized state internally.
         const hasTextAfter = groups
           .slice(groupIdx + 1)
           .some((g) => g.kind === "text" || g.kind === "wiki-proposal");
@@ -891,13 +662,6 @@ function AssistantMessage({
   );
 }
 
-/**
- * Synthetic assistant card that fills the gap between "user pressed send"
- * and the first reasoning/tool/text part arriving from the stream. Reuses
- * the same outer shell as a real assistant message so React doesn't have
- * to swap layouts mid-stream — the wrapper visually carries forward into
- * the real `AssistantMessage`'s first `PreResponseWrapper`.
- */
 function PendingAssistantCard({ status }: { status: string }) {
   return (
     <div className="flex justify-start">
@@ -927,40 +691,18 @@ function EmptyState({ userDisplayName }: { userDisplayName: string }) {
       <style>
         {`
           @keyframes advisor-chat-greeting-rise {
-            from {
-              opacity: 0;
-              transform: translateY(0.5rem);
-              filter: blur(10px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-              filter: blur(0);
-            }
+            from { opacity: 0; transform: translateY(0.5rem); filter: blur(10px); }
+            to { opacity: 1; transform: translateY(0); filter: blur(0); }
           }
           @keyframes advisor-chat-greeting-name {
-            from {
-              opacity: 0;
-              filter: blur(8px);
-            }
-            to {
-              opacity: 1;
-              filter: blur(0);
-            }
+            from { opacity: 0; filter: blur(8px); }
+            to { opacity: 1; filter: blur(0); }
           }
-          .advisor-chat-greeting-open {
-            animation: advisor-chat-greeting-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
-          }
-          .advisor-chat-greeting-name-line {
-            animation: advisor-chat-greeting-name 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.18s both;
-          }
+          .advisor-chat-greeting-open { animation: advisor-chat-greeting-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both; }
+          .advisor-chat-greeting-name-line { animation: advisor-chat-greeting-name 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.18s both; }
           @media (prefers-reduced-motion: reduce) {
-            .advisor-chat-greeting-open,
-            .advisor-chat-greeting-name-line {
-              animation: none !important;
-              opacity: 1 !important;
-              transform: none !important;
-              filter: none !important;
+            .advisor-chat-greeting-open, .advisor-chat-greeting-name-line {
+              animation: none !important; opacity: 1 !important; transform: none !important; filter: none !important;
             }
           }
         `}
@@ -995,8 +737,11 @@ export function ChatPanel({
 }) {
   const router = useRouter();
   const [input, setInput] = useState("");
-  const [hoveredRailCitationKey, setHoveredRailCitationKey] = useState<string | null>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [reviewEdit, setReviewEdit] = useState<PendingWikiEdit | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerRefreshKey, setDrawerRefreshKey] = useState(0);
+  const drawerReturnFocusRef = useRef<HTMLElement | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasAutoScrolledRef = useRef(false);
   const isScrollingToBottomRef = useRef(false);
@@ -1004,15 +749,6 @@ export function ChatPanel({
   const shouldStickToBottomRef = useRef(true);
 
   const stableChatId = chatId ?? `${projectId}-new`;
-  const [railState, setRailState] = useState<{
-    chatKey: string;
-    collapsed: boolean;
-    citationCount: number | null;
-  }>({
-    chatKey: stableChatId,
-    collapsed: true,
-    citationCount: null,
-  });
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
@@ -1034,40 +770,21 @@ export function ChatPanel({
 
   const isBusy = status === "submitted" || status === "streaming";
 
-  const railData = useMemo(
-    () => buildRailData(messages),
-    [messages]
-  );
-  const citationCount = railData.citations.length;
-  const citationRailVisible = citationCount > 0;
-
-  if (railState.chatKey !== stableChatId || railState.citationCount !== citationCount) {
-    const sameChat = railState.chatKey === stableChatId;
-    const nextCollapsed =
-      sameChat && railState.citationCount !== null && citationCount > railState.citationCount
-        ? false
-        : sameChat
-          ? railState.collapsed
-          : true;
-    setRailState({
-      chatKey: stableChatId,
-      collapsed: nextCollapsed,
-      citationCount,
-    });
-  }
-
-  const railCollapsed = railState.chatKey === stableChatId ? railState.collapsed : true;
-  const setRailCollapsed = useCallback((next: boolean | ((current: boolean) => boolean)) => {
-    setRailState((current) => ({
-      ...current,
-      collapsed: typeof next === "function" ? next(current.collapsed) : next,
-    }));
-  }, []);
-
   const streamingStatus = useMemo(
     () => getStreamingStatus(messages, status),
     [messages, status]
   );
+
+  const handleReviewProposal = useCallback((edit: PendingWikiEdit) => {
+    drawerReturnFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setReviewEdit(edit);
+    setDrawerOpen(true);
+  }, []);
+
+  const refreshDrawerData = useCallback(() => {
+    setDrawerRefreshKey((key) => key + 1);
+  }, []);
 
   const updateScrollToBottomButton = useCallback(() => {
     const viewport = scrollRef.current;
@@ -1170,16 +887,7 @@ export function ChatPanel({
   );
 
   return (
-    <section
-      className={cn(
-        "-m-4 grid h-svh grid-cols-1 gap-0 bg-background",
-        !citationRailVisible
-          ? "xl:grid-cols-[minmax(0,1fr)]"
-          : railCollapsed
-            ? "xl:grid-cols-[minmax(0,1fr)_auto]"
-            : "xl:grid-cols-[minmax(0,1fr)_19rem]"
-      )}
-    >
+    <section className="-m-4 grid h-svh grid-cols-1 gap-0 bg-background">
       <div className="flex min-h-0 flex-col overflow-hidden bg-background">
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
           <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
@@ -1216,7 +924,7 @@ export function ChatPanel({
                             message={message}
                             isStreaming={isStreamingAssistantMessage}
                             projectId={projectId}
-                            onCitationHighlight={setHoveredRailCitationKey}
+                            onReviewProposal={handleReviewProposal}
                           />
                         )}
                       </div>
@@ -1292,17 +1000,15 @@ export function ChatPanel({
         </div>
       </div>
 
-      {citationRailVisible ? (
-        <ChatRail
-          projectId={projectId}
-          citations={railData.citations}
-          memoryDrafts={railData.memoryDrafts}
-          facts={railData.facts}
-          collapsed={railCollapsed}
-          onToggle={() => setRailCollapsed((value) => !value)}
-          highlightedCitationKey={hoveredRailCitationKey}
-        />
-      ) : null}
+      <CanonicalDocDiffViewer
+        projectId={projectId}
+        selectedEdit={reviewEdit}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        refreshKey={drawerRefreshKey}
+        onResolved={refreshDrawerData}
+        returnFocusRef={drawerReturnFocusRef}
+      />
     </section>
   );
 }

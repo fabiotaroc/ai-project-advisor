@@ -1,12 +1,13 @@
 "use client";
 
-import { Check, Edit3, Loader2, X } from "lucide-react";
+import { ArrowUpRight, FilePenLine, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import type { PendingWikiEdit } from "@/lib/types";
+import { classifyPatchType } from "@/lib/wiki-patches";
 
 export type WikiProposalToolOutput = {
   proposed?: boolean;
@@ -20,7 +21,7 @@ export type WikiProposalToolOutput = {
   reason?: string | null;
 };
 
-type CardState = "draft" | "editing" | "saved" | "discarded";
+type CardState = "draft" | "saved" | "discarded";
 
 function stateForStatus(status: WikiProposalToolOutput["status"]): CardState {
   if (status === "accepted") return "saved";
@@ -31,154 +32,175 @@ function stateForStatus(status: WikiProposalToolOutput["status"]): CardState {
 export function WikiProposalCard({
   output,
   className,
+  onReview,
 }: {
   output: WikiProposalToolOutput;
   className?: string;
+  /** Open the unified review drawer focused on this edit. */
+  onReview?: (edit: PendingWikiEdit) => void;
 }) {
   const [state, setState] = useState<CardState>(() => stateForStatus(output.status));
-  const [draft, setDraft] = useState(output.inserted_text ?? "");
+  const [edit, setEdit] = useState<PendingWikiEdit | null>(null);
   const [error, setError] = useState<string | null>(output.error ?? null);
-  const [busyAction, setBusyAction] = useState<"save" | "discard" | "draft" | null>(null);
+  const [busyAction, setBusyAction] = useState<"discard" | null>(null);
 
   useEffect(() => {
-    if (!output.edit_id || state !== "draft") return;
+    if (!output.edit_id) return;
 
     let cancelled = false;
 
-    async function refreshProposalState() {
+    async function refresh() {
       try {
         const response = await fetch(`/api/wiki/pending-edits/${output.edit_id}`);
-        const payload = (await response.json()) as {
-          edit?: { status?: WikiProposalToolOutput["status"]; inserted_text?: string };
-        };
-        if (!response.ok || cancelled) return;
-
-        const nextState = stateForStatus(payload.edit?.status);
-        setState(nextState);
-        if (payload.edit?.inserted_text && nextState === "draft") {
-          setDraft(payload.edit.inserted_text);
+        const payload = (await response.json()) as { edit?: PendingWikiEdit; error?: string };
+        if (cancelled || !response.ok) return;
+        if (payload.edit) {
+          setEdit(payload.edit);
+          setState(stateForStatus(payload.edit.status));
         }
       } catch {
-        // Keep the persisted chat output visible if the status refresh is unavailable.
+        // Keep persisted output visible on transient failure.
       }
     }
 
-    void refreshProposalState();
+    void refresh();
+    // Light polling while still in draft, so the card reflects drawer actions.
+    const interval = window.setInterval(() => {
+      if (state === "draft") void refresh();
+    }, 4000);
 
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
     };
   }, [output.edit_id, state]);
 
   if (!output.proposed || !output.edit_id) {
     return (
-      <div className={cn("rounded-lg border border-destructive-line bg-destructive-soft px-3 py-2 text-sm text-destructive", className)}>
+      <div
+        className={cn(
+          "rounded-lg border border-destructive-line bg-destructive-soft px-3 py-2 text-sm text-destructive",
+          className,
+        )}
+      >
         {output.error ?? "The memory proposal could not be created."}
       </div>
     );
   }
 
   const target = output.target_doc_slug ? `${output.target_doc_slug}.md` : "wiki";
+  const reason = edit?.reason ?? output.reason ?? null;
+  const patchType = edit
+    ? classifyPatchType(edit.inserted_text, edit.deleted_text)
+    : "add";
+  const typeLabel = patchType === "update" ? "Update" : patchType === "remove" ? "Remove" : "Add";
 
-  async function resolve(action: "accept" | "reject") {
+  async function discard() {
     if (!output.edit_id) return;
-    setBusyAction(action === "accept" ? "save" : "discard");
+    setBusyAction("discard");
     setError(null);
 
     try {
       const response = await fetch(`/api/wiki/pending-edits/${output.edit_id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action: "reject" }),
       });
-      const payload = (await response.json()) as {
-        edit?: { status?: WikiProposalToolOutput["status"] };
-        error?: string;
-      };
+      const payload = (await response.json()) as { edit?: PendingWikiEdit; error?: string };
       if (!response.ok) {
-        throw new Error(payload.error ?? "Failed to resolve memory proposal.");
+        throw new Error(payload.error ?? "Failed to discard memory proposal.");
       }
-      setState(stateForStatus(payload.edit?.status ?? (action === "accept" ? "accepted" : "rejected")));
+      if (payload.edit) {
+        setEdit(payload.edit);
+        setState(stateForStatus(payload.edit.status));
+      } else {
+        setState("discarded");
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to resolve memory proposal.");
+      setError(err instanceof Error ? err.message : "Failed to discard memory proposal.");
     } finally {
       setBusyAction(null);
     }
   }
 
-  async function saveDraft() {
-    if (!output.edit_id) return;
-    const trimmed = draft.trim();
-    if (!trimmed) {
-      setError("Proposal content is required.");
+  function openReview() {
+    if (!edit && !output.edit_id) return;
+    if (edit) {
+      onReview?.(edit);
       return;
     }
-
-    setBusyAction("draft");
-    setError(null);
-    try {
-      const response = await fetch(`/api/wiki/pending-edits/${output.edit_id}/draft`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inserted_text: trimmed }),
-      });
-      const payload = (await response.json()) as {
-        edit?: { inserted_text?: string };
-        error?: string;
-      };
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Failed to update proposal draft.");
-      }
-      setDraft(payload.edit?.inserted_text ?? trimmed);
-      setState("draft");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update proposal draft.");
-    } finally {
-      setBusyAction(null);
-    }
+    // Fall back to a synthetic edit shape if metadata isn't loaded yet so
+    // the drawer can still open and load real data via its own loader.
+    onReview?.({
+      id: output.edit_id!,
+      project_id: "",
+      target_doc_id: output.target_doc_id ?? "",
+      source_material_id: null,
+      origin: "chat",
+      anchor: {},
+      inserted_text: output.inserted_text ?? "",
+      deleted_text: null,
+      reason: output.reason ?? null,
+      confidence: null,
+      status: "pending",
+      repositioned: false,
+      fallback_applied: false,
+      created_by: null,
+      resolved_by: null,
+      created_at: new Date().toISOString(),
+      resolved_at: null,
+      target_doc: null,
+      source_title: null,
+    });
   }
 
   if (state === "saved" || state === "discarded") {
     return (
-      <div className={cn("inline-flex w-fit items-center gap-2 rounded-lg border border-ai-line bg-ai-surface px-3 py-2 text-sm", className)}>
-        <Badge variant={state === "saved" ? "success" : "outline"} className="h-5 rounded-md px-1.5 text-[10px]">
+      <div
+        className={cn(
+          "inline-flex w-fit items-center gap-2 rounded-lg border border-ai-line bg-ai-surface px-3 py-2 text-sm",
+          className,
+        )}
+      >
+        <Badge
+          variant={state === "saved" ? "success" : "outline"}
+          className="h-5 rounded-md px-1.5 text-[10px]"
+        >
           {state === "saved" ? "Saved" : "Discarded"}
         </Badge>
         <span className="text-muted-foreground">
           {state === "saved" ? `Saved to ${target}` : "Memory proposal discarded"}
         </span>
+        {onReview ? (
+          <Button type="button" variant="ghost" size="xs" onClick={openReview} className="-mr-2">
+            View
+          </Button>
+        ) : null}
       </div>
     );
   }
 
   return (
-    <section className={cn("max-w-[38rem] rounded-xl border border-dashed border-accent-line bg-ai-surface p-3 shadow-[var(--shadow-1)]", className)}>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="font-mono text-[11px] uppercase tracking-wide text-accent-ink">
-          Memory · proposed update
+    <section
+      className={cn(
+        "max-w-[38rem] rounded-xl border border-dashed border-accent-line bg-ai-surface p-3 shadow-[var(--shadow-1)]",
+        className,
+      )}
+    >
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-accent-ink">
+          <FilePenLine className="size-3.5" />
+          Memory · proposed {typeLabel.toLowerCase()}
         </p>
         <Badge variant="accent" className="h-5 rounded-md px-1.5 text-[10px]">
-          Draft
+          Pending review
         </Badge>
       </div>
 
       <p className="text-sm leading-6 text-foreground">
-        Proposed update to <span className="font-medium">{target}</span>
-        {output.reason ? <span className="text-muted-foreground"> · {output.reason}</span> : null}
+        {typeLabel} to <span className="font-medium">{target}</span>
+        {reason ? <span className="text-muted-foreground"> · {reason}</span> : null}
       </p>
-
-      {state === "editing" ? (
-        <Textarea
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          className="mt-3 min-h-32 font-mono text-sm leading-6"
-          aria-label="Edit memory proposal draft"
-        />
-      ) : (
-        <blockquote className="mt-3 whitespace-pre-wrap rounded-lg border border-ai-line bg-background/70 p-3 font-mono text-xs leading-6 text-foreground">
-          {draft}
-        </blockquote>
-      )}
 
       {error ? (
         <p className="mt-2 rounded-md border border-destructive-line bg-destructive-soft px-2 py-1.5 text-xs text-destructive">
@@ -187,32 +209,30 @@ export function WikiProposalCard({
       ) : null}
 
       <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-        {state === "editing" ? (
-          <>
-            <Button type="button" variant="ghost" size="sm" disabled={Boolean(busyAction)} onClick={() => setState("draft")}>
-              Cancel
-            </Button>
-            <Button type="button" variant="outline" size="sm" disabled={Boolean(busyAction)} onClick={() => void saveDraft()}>
-              {busyAction === "draft" ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Check data-icon="inline-start" />}
-              Save draft
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button type="button" variant="ghost" size="sm" disabled={Boolean(busyAction)} onClick={() => void resolve("reject")}>
-              {busyAction === "discard" ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <X data-icon="inline-start" />}
-              Discard
-            </Button>
-            <Button type="button" variant="outline" size="sm" disabled={Boolean(busyAction)} onClick={() => setState("editing")}>
-              <Edit3 data-icon="inline-start" />
-              Edit draft
-            </Button>
-            <Button type="button" size="sm" disabled={Boolean(busyAction)} onClick={() => void resolve("accept")}>
-              {busyAction === "save" ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Check data-icon="inline-start" />}
-              Save to memory
-            </Button>
-          </>
-        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={Boolean(busyAction)}
+          onClick={() => void discard()}
+        >
+          {busyAction === "discard" ? (
+            <Loader2 data-icon="inline-start" className="animate-spin" />
+          ) : (
+            <X data-icon="inline-start" />
+          )}
+          Discard
+        </Button>
+        <Button
+          type="button"
+          variant="default"
+          size="sm"
+          onClick={openReview}
+          disabled={!onReview}
+        >
+          Review
+          <ArrowUpRight data-icon="inline-end" />
+        </Button>
       </div>
     </section>
   );

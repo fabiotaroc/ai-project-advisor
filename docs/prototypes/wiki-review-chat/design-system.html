@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-accent="electric">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Advisor — Design System</title>
+<link rel="stylesheet" href="tokens.css" />
+<style>
+  /* ------- doc-only chrome ------- */
+  .doc {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 64px 48px 160px;
+  }
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    backdrop-filter: blur(12px);
+    background: oklch(from var(--paper) l c h / 0.85);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar-inner {
+    max-width: 1180px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 48px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 600; font-size: 14px; letter-spacing: -0.01em;
+  }
+  .brand-mark {
+    width: 22px; height: 22px;
+    background: var(--ink-1); color: var(--paper);
+    border-radius: 6px;
+    display: grid; place-items: center;
+    font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+  }
+  .brand-mark::after { content: "◐"; }
+  .top-nav { display: flex; align-items: center; gap: 4px; }
+  .top-nav a {
+    padding: 6px 10px; font-size: 13px; color: var(--ink-2);
+    border-radius: var(--radius-sm);
+  }
+  .top-nav a:hover { background: var(--paper-3); color: var(--ink-1); }
+
+  .toggle-row { display: flex; align-items: center; gap: 8px; }
+  .seg {
+    display: inline-flex; padding: 3px;
+    background: var(--paper-3); border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+  }
+  .seg button {
+    border: 0; background: transparent; cursor: pointer;
+    padding: 5px 10px; font-size: 12px; color: var(--ink-2);
+    border-radius: 7px; font-family: var(--font-mono);
+  }
+  .seg button[aria-pressed="true"] {
+    background: var(--paper); color: var(--ink-1);
+    box-shadow: var(--shadow-1);
+  }
+
+  /* hero */
+  .hero { padding: 40px 0 80px; }
+  .hero h1 {
+    font-size: 64px; line-height: 1.02; letter-spacing: -0.035em;
+    font-weight: 500; margin: 0 0 24px; max-width: 18ch;
+  }
+  .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero p {
+    font-size: 18px; line-height: 1.55; color: var(--ink-2);
+    max-width: 60ch; margin: 0;
+  }
+  .hero-meta {
+    margin-top: 40px;
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 1px; background: var(--line);
+    border: 1px solid var(--line); border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+  .hero-meta div { background: var(--paper); padding: 18px 20px; }
+  .hero-meta .lbl {
+    font-family: var(--font-mono); font-size: 10.5px;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    color: var(--ink-3); margin-bottom: 6px;
+  }
+  .hero-meta .val { font-size: 14px; color: var(--ink-1); font-weight: 500; }
+
+  /* sections */
+  section { padding: 56px 0; border-top: 1px solid var(--line); }
+  .sec-head {
+    display: grid; grid-template-columns: 240px 1fr;
+    gap: 64px; margin-bottom: 32px; align-items: baseline;
+  }
+  .sec-num {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--ink-3); letter-spacing: 0.08em;
+  }
+  .sec-title {
+    font-size: 28px; letter-spacing: -0.02em; font-weight: 500;
+    margin: 0 0 8px;
+  }
+  .sec-sub { color: var(--ink-2); font-size: 15px; max-width: 60ch; }
+  .sec-body { padding-left: 304px; }
+  @media (max-width: 980px) {
+    .sec-head { grid-template-columns: 1fr; gap: 16px; }
+    .sec-body { padding-left: 0; }
+  }
+
+  /* color swatches */
+  .palette { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+  .swatch { display: flex; flex-direction: column; gap: 8px; }
+  .swatch .chip {
+    aspect-ratio: 1.4 / 1; border-radius: var(--radius-md);
+    border: 1px solid var(--line); position: relative;
+    box-shadow: var(--shadow-1);
+  }
+  .swatch .meta { display: flex; flex-direction: column; gap: 2px; padding: 0 2px; }
+  .swatch .name { font-size: 13px; color: var(--ink-1); font-weight: 500; }
+  .swatch .var { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+
+  .accent-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .accent-card {
+    border: 1px solid var(--line); border-radius: var(--radius-lg);
+    padding: 20px; background: var(--paper);
+    cursor: pointer; transition: border-color var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
+  }
+  .accent-card:hover { border-color: var(--ink-4); transform: translateY(-1px); }
+  .accent-card[aria-pressed="true"] {
+    border-color: var(--accent); box-shadow: var(--ring);
+  }
+  .accent-card .ribbon {
+    height: 56px; border-radius: var(--radius-md);
+    margin-bottom: 16px; display: grid; grid-template-columns: 2fr 1fr 1fr;
+    overflow: hidden; border: 1px solid var(--line);
+  }
+  .accent-card h4 { margin: 0 0 4px; font-size: 16px; font-weight: 500; }
+  .accent-card .desc { color: var(--ink-2); font-size: 13px; line-height: 1.5; }
+
+  /* type */
+  .type-spec { display: grid; grid-template-columns: 90px 1fr 120px; gap: 24px; align-items: baseline; padding: 20px 0; border-bottom: 1px solid var(--line); }
+  .type-spec:last-child { border-bottom: 0; }
+  .type-spec .name { font-family: var(--font-mono); font-size: 12px; color: var(--ink-3); }
+  .type-spec .specs { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); text-align: right; }
+  .display { font-size: 56px; line-height: 1.05; letter-spacing: -0.035em; font-weight: 500; }
+  .h1 { font-size: 40px; line-height: 1.1; letter-spacing: -0.025em; font-weight: 500; }
+  .h2 { font-size: 28px; line-height: 1.18; letter-spacing: -0.02em; font-weight: 500; }
+  .h3 { font-size: 20px; line-height: 1.3; letter-spacing: -0.01em; font-weight: 500; }
+  .body { font-size: 15px; line-height: 1.55; }
+  .small { font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+  .code { font-family: var(--font-mono); font-size: 13px; color: var(--ink-1); }
+
+  /* component grid */
+  .comp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .comp-card {
+    border: 1px solid var(--line); border-radius: var(--radius-lg);
+    background: var(--paper); overflow: hidden;
+  }
+  .comp-card .stage {
+    padding: 32px 24px; min-height: 140px;
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px;
+    background: var(--paper-2);
+    background-image:
+      linear-gradient(to right, oklch(from var(--ink-4) l c h / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, oklch(from var(--ink-4) l c h / 0.05) 1px, transparent 1px);
+    background-size: 16px 16px;
+  }
+  .comp-card .meta { padding: 14px 18px; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; }
+  .comp-card .meta .label { font-size: 13px; font-weight: 500; }
+  .comp-card .meta .ref { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+
+  /* AI chat preview */
+  .chat-preview {
+    display: flex; flex-direction: column; gap: 16px;
+    padding: 28px; border: 1px solid var(--line);
+    border-radius: var(--radius-lg); background: var(--paper);
+  }
+  .msg { display: flex; gap: 14px; align-items: flex-start; }
+  .msg .avatar {
+    width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+    display: grid; place-items: center;
+    font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+  }
+  .msg.user .avatar { background: var(--paper-3); color: var(--ink-2); border: 1px solid var(--line); }
+  .msg.ai .avatar { background: var(--ink-1); color: var(--paper); }
+  .msg .body-wrap { flex: 1; min-width: 0; }
+  .msg .who { font-size: 12px; color: var(--ink-3); margin-bottom: 4px; font-family: var(--font-mono); }
+  .msg.user .bubble { color: var(--ink-1); padding: 4px 0; }
+  .msg.ai .bubble {
+    color: var(--ink-1); padding: 14px 16px;
+    background: var(--ai-surface); border: 1px solid var(--ai-line);
+    border-radius: var(--radius-md); border-top-left-radius: 4px;
+  }
+  .bubble p { margin: 0 0 10px; font-size: 14.5px; line-height: 1.6; }
+  .bubble p:last-child { margin: 0; }
+
+  /* tool/agent action */
+  .tool-trace {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 10px; font-family: var(--font-mono); font-size: 11.5px;
+    background: var(--paper-3); border: 1px solid var(--line); border-radius: var(--radius-sm);
+    color: var(--ink-2);
+  }
+  .tool-trace .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--success);
+    box-shadow: 0 0 0 3px oklch(from var(--success) l c h / 0.18);
+  }
+
+  /* memory card */
+  .memory-card {
+    border: 1px dashed var(--accent-line);
+    background: var(--ai-surface);
+    border-radius: var(--radius-md);
+    padding: 16px 18px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .memory-card .head {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px; color: var(--accent-ink);
+    font-family: var(--font-mono); letter-spacing: 0.04em;
+  }
+  .memory-card .body { color: var(--ink-1); font-size: 14px; line-height: 1.55; }
+  .memory-card .actions { display: flex; gap: 8px; }
+
+  /* radius / shadow / spacing */
+  .stack-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .demo-tile {
+    border: 1px solid var(--line); background: var(--paper);
+    padding: 20px; display: flex; flex-direction: column; gap: 12px;
+    align-items: center; justify-content: center; min-height: 140px;
+  }
+  .demo-tile .label { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+
+  .shadow-box { width: 100%; height: 60px; background: var(--paper); border-radius: var(--radius-md); }
+
+  .spacing-row { display: flex; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .spacing-row:last-child { border: 0; }
+  .spacing-row .name { width: 50px; font-family: var(--font-mono); font-size: 12px; color: var(--ink-3); }
+  .spacing-row .px { width: 60px; font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); }
+  .spacing-row .bar { height: 12px; background: var(--accent-soft-2); border-radius: 3px; }
+
+  /* footer */
+  footer { padding: 64px 48px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 13px; text-align: center; }
+  footer a { color: var(--ink-2); border-bottom: 1px solid var(--line); }
+</style>
+</head>
+<body class="scroll">
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <span>Advisor — Design System</span>
+      <span class="pill" style="margin-left: 8px;">v0.1</span>
+    </div>
+    <div class="top-nav">
+      <a href="#foundation">Foundation</a>
+      <a href="#color">Color</a>
+      <a href="#type">Type</a>
+      <a href="#components">Components</a>
+      <a href="#ai">AI patterns</a>
+      <a href="prototype.html" class="btn btn-secondary btn-sm" style="margin-left: 12px;">Open prototype →</a>
+    </div>
+    <div class="toggle-row">
+      <div class="seg" role="group" aria-label="Theme">
+        <button data-theme-set="light" aria-pressed="true">Light</button>
+        <button data-theme-set="dark">Dark</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="doc">
+
+  <!-- HERO -->
+  <header class="hero">
+    <div class="eyebrow" style="margin-bottom: 24px;">Design System · April 2026</div>
+    <h1>A calm, considered system for a <em>thinking partner</em>.</h1>
+    <p>
+      Advisor helps PMs, consultants, and founders carry a project's full context. The interface
+      should feel like a well-kept notebook — quiet by default, generous with whitespace, precise
+      about evidence. AI is present but not loud; sources are the hero.
+    </p>
+    <div class="hero-meta">
+      <div><div class="lbl">Tone</div><div class="val">Calm · editorial</div></div>
+      <div><div class="lbl">Type</div><div class="val">Geist + Geist Mono</div></div>
+      <div><div class="lbl">Accent</div><div class="val" id="accent-readout">Electric</div></div>
+      <div><div class="lbl">Radius</div><div class="val">10px · soft</div></div>
+    </div>
+  </header>
+
+  <!-- PRINCIPLES -->
+  <section id="foundation">
+    <div class="sec-head">
+      <div>
+        <div class="sec-num">01 — Principles</div>
+      </div>
+      <div>
+        <h2 class="sec-title">Five rules the system holds itself to.</h2>
+        <p class="sec-sub">Each surface, component, and AI moment should pass these tests before it ships.</p>
+      </div>
+    </div>
+    <div class="sec-body">
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden;">
+        <div style="background: var(--paper); padding: 28px 28px 32px;">
+          <div class="mono" style="color: var(--ink-3); margin-bottom: 8px;">P · 01</div>
+          <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 500;">Evidence over confidence.</h3>
+          <p style="margin: 0; color: var(--ink-2); font-size: 14px; line-height: 1.55;">Every claim the AI makes carries a numbered citation back to the source. No ungrounded prose.</p>
+        </div>
+        <div style="background: var(--paper); padding: 28px 28px 32px;">
+          <div class="mono" style="color: var(--ink-3); margin-bottom: 8px;">P · 02</div>
+          <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 500;">Memory needs consent.</h3>
+          <p style="margin: 0; color: var(--ink-2); font-size: 14px; line-height: 1.55;">Durable updates appear as drafts in a review surface. The user is always the one who commits.</p>
+        </div>
+        <div style="background: var(--paper); padding: 28px 28px 32px;">
+          <div class="mono" style="color: var(--ink-3); margin-bottom: 8px;">P · 03</div>
+          <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 500;">Hide the machinery.</h3>
+          <p style="margin: 0; color: var(--ink-2); font-size: 14px; line-height: 1.55;">Tool calls collapse into a single line. Prompts, chunks, and embeddings live behind a quiet "show details".</p>
+        </div>
+        <div style="background: var(--paper); padding: 28px 28px 32px;">
+          <div class="mono" style="color: var(--ink-3); margin-bottom: 8px;">P · 04</div>
+          <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 500;">Whitespace is structure.</h3>
+          <p style="margin: 0; color: var(--ink-2); font-size: 14px; line-height: 1.55;">Density is a last resort. The product has time to think; the layout should breathe like it.</p>
+        </div>
+        <div style="background: var(--paper); padding: 28px 28px 32px; grid-column: 1 / -1;">
+          <div class="mono" style="color: var(--ink-3); margin-bottom: 8px;">P · 05</div>
+          <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 500;">Two voices, one page.</h3>
+          <p style="margin: 0; color: var(--ink-2); font-size: 14px; line-height: 1.55;">Sans for prose, mono for evidence — file paths, citations, timestamps, tool names, IDs. The mono is the system whispering "this is real, you can verify it."</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- COLOR -->
+  <section id="color">
+    <div class="sec-head">
+      <div>
+        <div class="sec-num">02 — Color</div>
+      </div>
+      <div>
+        <h2 class="sec-title">Warm ink on warm paper, plus one accent.</h2>
+        <p class="sec-sub">Neutrals carry slightly warm chroma so the surface feels paper, not screen. Accent does the work of structure and meaning — there is no decorative color.</p>
+      </div>
+    </div>
+    <div class="sec-body" style="display: flex; flex-direction: column; gap: 40px;">
+
+      <div>
+        <div class="eyebrow" style="margin-bottom: 16px;">Neutrals</div>
+        <div class="palette">
+          <div class="swatch"><div class="chip" style="background: var(--paper);"></div><div class="meta"><span class="name">Paper</span><span class="var">--paper</span></div></div>
+          <div class="swatch"><div class="chip" style="background: var(--paper-2);"></div><div class="meta"><span class="name">Paper 2</span><span class="var">--paper-2</span></div></div>
+          <div class="swatch"><div class="chip" style="background: var(--paper-3);"></div><div class="meta"><span class="name">Paper 3</span><span class="var">--paper-3</span></div></div>
+          <div class="swatch"><div class="chip" style="background: var(--line);"></div><div class="meta"><span class="name">Line</span><span class="var">--line</span></div></div>
+          <div class="swatch"><div class="chip" style="background: var(--ink-3);"></div><div class="meta"><span class="name">Ink 3</span><span class="var">--ink-3</span></div></div>
+          <div class="swatch"><div class="chip" style="background: var(--ink-1);"></div><div class="meta"><span class="name">Ink 1</span><span class="var">--ink-1</span></div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="eyebrow" style="margin-bottom: 16px;">Semantic</div>
+        <div class="palette">
+          <div class="swatch"><div class="chip" style="background: var(--accent);"></div><div class="meta"><span class="name">Accent</span><span class="var">--accent</span></div></div>
+          <div class="swatch"><div class="chip" style="background: var(--accent-soft); border-color: var(--accent-line);"></div><div class="meta"><span class="name">Accent soft</span><span class="var">--accent-soft</span></div></div>
+          <div class="swatch"><div class="chip" style="background: var(--success);"></div><div class="meta"><span class="name">Success</span><span class="var">--success</span></div></div>
+          <div class="swatch"><div class="chip" style="background: var(--warning);"></div><div class="meta"><span class="name">Warning</span><span class="var">--warning</span></div></div>
+          <div class="swatch"><div class="chip" style="background: var(--danger);"></div><div class="meta"><span class="name">Danger</span><span class="var">--danger</span></div></div>
+          <div class="swatch"><div class="chip" style="background: var(--ai-surface); border-color: var(--ai-line);"></div><div class="meta"><span class="name">AI surface</span><span class="var">--ai-surface</span></div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="eyebrow" style="margin-bottom: 16px;">Accent directions — pick one, the system follows</div>
+        <div class="accent-grid">
+          <div class="accent-card" data-accent-set="electric" aria-pressed="true">
+            <div class="ribbon">
+              <div style="background: oklch(0.585 0.220 255)"></div>
+              <div style="background: oklch(0.925 0.060 255)"></div>
+              <div style="background: oklch(0.870 0.090 255)"></div>
+            </div>
+            <h4>Electric</h4>
+            <p class="desc">Bright, saturated blue. The default. Confident and crisp — reads as a modern, intelligent product.</p>
+          </div>
+          <div class="accent-card" data-accent-set="iris">
+            <div class="ribbon">
+              <div style="background: oklch(0.515 0.135 275)"></div>
+              <div style="background: oklch(0.925 0.045 275)"></div>
+              <div style="background: oklch(0.880 0.060 275)"></div>
+            </div>
+            <h4>Iris</h4>
+            <p class="desc">Deep periwinkle. Quieter and more editorial — the calm alternative if Electric feels too loud.</p>
+          </div>
+          <div class="accent-card" data-accent-set="moss">
+            <div class="ribbon">
+              <div style="background: oklch(0.495 0.085 160)"></div>
+              <div style="background: oklch(0.925 0.045 160)"></div>
+              <div style="background: oklch(0.880 0.060 160)"></div>
+            </div>
+            <h4>Moss</h4>
+            <p class="desc">Forest sage. Reads as "advisor" — calm, organic, low-stakes. Best for consultants and operators.</p>
+          </div>
+          <div class="accent-card" data-accent-set="ember">
+            <div class="ribbon">
+              <div style="background: oklch(0.575 0.140 40)"></div>
+              <div style="background: oklch(0.935 0.045 40)"></div>
+              <div style="background: oklch(0.885 0.065 40)"></div>
+            </div>
+            <h4>Ember</h4>
+            <p class="desc">Terracotta. The warmest, most human option. Best if the brand wants to feel personal and bespoke.</p>
+          </div>
+        </div>
+        <p class="small" style="margin-top: 16px;">Click a swatch — the entire system updates live. Same for theme toggle in the top bar.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- TYPE -->
+  <section id="type">
+    <div class="sec-head">
+      <div>
+        <div class="sec-num">03 — Type</div>
+      </div>
+      <div>
+        <h2 class="sec-title">Geist for prose, Geist Mono for evidence.</h2>
+        <p class="sec-sub">One typeface family, two voices. The mono shows up wherever the system is being literal — file paths, citations, timestamps, tool names, IDs. Never decorative.</p>
+      </div>
+    </div>
+    <div class="sec-body">
+      <div class="surface" style="padding: 8px 24px;">
+        <div class="type-spec">
+          <div class="name">display</div>
+          <div class="display">A thinking partner.</div>
+          <div class="specs">56 / 1.05<br/>−3.5%</div>
+        </div>
+        <div class="type-spec">
+          <div class="name">h1</div>
+          <div class="h1">Project memory, made durable.</div>
+          <div class="specs">40 / 1.10<br/>−2.5%</div>
+        </div>
+        <div class="type-spec">
+          <div class="name">h2</div>
+          <div class="h2">Ground every answer in the source.</div>
+          <div class="specs">28 / 1.18<br/>−2.0%</div>
+        </div>
+        <div class="type-spec">
+          <div class="name">h3</div>
+          <div class="h3">Drafts await your review</div>
+          <div class="specs">20 / 1.30<br/>−1.0%</div>
+        </div>
+        <div class="type-spec">
+          <div class="name">body</div>
+          <div class="body">The advisor reads your sources, keeps a living memory of the project, and never commits a durable change without your sign-off. It feels less like a chatbot and more like the chief of staff you forgot to hire.</div>
+          <div class="specs">15 / 1.55</div>
+        </div>
+        <div class="type-spec">
+          <div class="name">small</div>
+          <div class="small">Updated 2 minutes ago by Codex from <span class="mono">samsung-q2-recap.pdf</span></div>
+          <div class="specs">13 / 1.50</div>
+        </div>
+        <div class="type-spec">
+          <div class="name">mono</div>
+          <div class="code">read_file("docs/PRD.md") · 1.4kb · 22ms</div>
+          <div class="specs">13 / 1.40</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPONENTS -->
+  <section id="components">
+    <div class="sec-head">
+      <div>
+        <div class="sec-num">04 — Components</div>
+      </div>
+      <div>
+        <h2 class="sec-title">Small set, deeply considered.</h2>
+        <p class="sec-sub">A short alphabet. Each component does one thing well; combinations carry the work.</p>
+      </div>
+    </div>
+    <div class="sec-body" style="display: flex; flex-direction: column; gap: 16px;">
+
+      <div class="comp-grid">
+        <div class="comp-card">
+          <div class="stage">
+            <button class="btn btn-primary">New chat</button>
+            <button class="btn btn-secondary">Upload source</button>
+            <button class="btn btn-ghost">Cancel</button>
+          </div>
+          <div class="meta"><span class="label">Buttons</span><span class="ref">primary · secondary · ghost</span></div>
+        </div>
+
+        <div class="comp-card">
+          <div class="stage">
+            <span class="pill"><span style="width:6px;height:6px;border-radius:50%;background:var(--ink-3)"></span> Draft</span>
+            <span class="pill pill-accent">Memory update</span>
+            <span class="pill pill-success">Indexed · 12 chunks</span>
+            <span class="pill pill-warning">Needs review</span>
+          </div>
+          <div class="meta"><span class="label">Pills</span><span class="ref">neutral · accent · success · warning</span></div>
+        </div>
+
+        <div class="comp-card">
+          <div class="stage" style="flex-direction: column; align-items: stretch; padding: 20px;">
+            <input class="input" placeholder="Ask about this project…" />
+            <input class="input" value="samsung-q2-recap.pdf" style="font-family: var(--font-mono);" />
+          </div>
+          <div class="meta"><span class="label">Inputs</span><span class="ref">.input · focus ring uses --accent</span></div>
+        </div>
+
+        <div class="comp-card">
+          <div class="stage">
+            <span class="kbd">⌘</span><span class="kbd">K</span>
+            <span style="color: var(--ink-3); font-size: 12px;">opens search</span>
+            <span class="kbd">↵</span>
+            <span style="color: var(--ink-3); font-size: 12px;">sends message</span>
+          </div>
+          <div class="meta"><span class="label">Keyboard</span><span class="ref">.kbd</span></div>
+        </div>
+
+        <div class="comp-card">
+          <div class="stage" style="padding: 24px;">
+            <div class="placeholder" style="width: 100%; height: 88px;">[ source thumbnail ]</div>
+          </div>
+          <div class="meta"><span class="label">Placeholder</span><span class="ref">for missing imagery / future media</span></div>
+        </div>
+
+        <div class="comp-card">
+          <div class="stage">
+            <span class="tool-trace"><span class="dot"></span>read_file <span style="color: var(--ink-3);">·</span> docs/PRD.md <span style="color: var(--ink-3);">· 22ms</span></span>
+          </div>
+          <div class="meta"><span class="label">Tool trace</span><span class="ref">collapsed by default</span></div>
+        </div>
+      </div>
+
+      <!-- radii / shadow / spacing -->
+      <div class="comp-grid" style="margin-top: 16px;">
+        <div class="comp-card">
+          <div class="stage" style="gap: 14px;">
+            <div style="width: 56px; height: 56px; background: var(--accent-soft-2); border: 1px solid var(--accent-line); border-radius: var(--radius-xs);"></div>
+            <div style="width: 56px; height: 56px; background: var(--accent-soft-2); border: 1px solid var(--accent-line); border-radius: var(--radius-sm);"></div>
+            <div style="width: 56px; height: 56px; background: var(--accent-soft-2); border: 1px solid var(--accent-line); border-radius: var(--radius-md);"></div>
+            <div style="width: 56px; height: 56px; background: var(--accent-soft-2); border: 1px solid var(--accent-line); border-radius: var(--radius-lg);"></div>
+            <div style="width: 56px; height: 56px; background: var(--accent-soft-2); border: 1px solid var(--accent-line); border-radius: var(--radius-xl);"></div>
+          </div>
+          <div class="meta"><span class="label">Radius</span><span class="ref">4 · 6 · 10 · 14 · 20</span></div>
+        </div>
+
+        <div class="comp-card">
+          <div class="stage" style="flex-direction: column; align-items: stretch; padding: 24px; gap: 12px;">
+            <div class="shadow-box" style="box-shadow: var(--shadow-1)"></div>
+            <div class="shadow-box" style="box-shadow: var(--shadow-2)"></div>
+            <div class="shadow-box" style="box-shadow: var(--shadow-3)"></div>
+          </div>
+          <div class="meta"><span class="label">Shadow</span><span class="ref">paper-soft · 1 / 2 / 3</span></div>
+        </div>
+
+        <div class="comp-card" style="grid-column: 1 / -1;">
+          <div class="stage" style="flex-direction: column; align-items: stretch; padding: 24px;">
+            <div class="spacing-row"><span class="name">s-1</span><span class="px">4 px</span><div class="bar" style="width: 4px;"></div></div>
+            <div class="spacing-row"><span class="name">s-2</span><span class="px">8 px</span><div class="bar" style="width: 8px;"></div></div>
+            <div class="spacing-row"><span class="name">s-3</span><span class="px">12 px</span><div class="bar" style="width: 12px;"></div></div>
+            <div class="spacing-row"><span class="name">s-4</span><span class="px">16 px</span><div class="bar" style="width: 16px;"></div></div>
+            <div class="spacing-row"><span class="name">s-5</span><span class="px">20 px</span><div class="bar" style="width: 20px;"></div></div>
+            <div class="spacing-row"><span class="name">s-6</span><span class="px">24 px</span><div class="bar" style="width: 24px;"></div></div>
+            <div class="spacing-row"><span class="name">s-7</span><span class="px">32 px</span><div class="bar" style="width: 32px;"></div></div>
+            <div class="spacing-row"><span class="name">s-8</span><span class="px">40 px</span><div class="bar" style="width: 40px;"></div></div>
+          </div>
+          <div class="meta"><span class="label">Spacing</span><span class="ref">4pt scale · airy default</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AI PATTERNS -->
+  <section id="ai">
+    <div class="sec-head">
+      <div>
+        <div class="sec-num">05 — AI patterns</div>
+      </div>
+      <div>
+        <h2 class="sec-title">How the advisor shows itself.</h2>
+        <p class="sec-sub">The product lives or dies on these moments. Each has a specific visual treatment.</p>
+      </div>
+    </div>
+    <div class="sec-body" style="display: flex; flex-direction: column; gap: 24px;">
+
+      <div class="chat-preview">
+        <div class="msg user">
+          <div class="avatar">T</div>
+          <div class="body-wrap">
+            <div class="who">Taro · 2:14 PM</div>
+            <div class="bubble">
+              <p>What's our position on EU hosting for the Samsung pilot? I keep getting asked.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="msg ai">
+          <div class="avatar">◐</div>
+          <div class="body-wrap">
+            <div class="who">Advisor · grounded in 3 sources</div>
+            <div class="bubble">
+              <p>The PRD commits to supporting EU-hosted infrastructure where possible<span class="cite">1</span>, and lists a data processing agreement and explicit handling of deletion requests as MVP-trust baseline items<span class="cite">1</span>. The most recent stakeholder note from Tomas adds that Samsung Legal flagged Germany specifically — they want German-region hosting for any production rollout<span class="cite">2</span>.</p>
+              <p>You don't yet have a written hosting plan. Suggested next step is a one-pager covering region, subprocessors, and DPA template — I can draft it from the PRD and Tomas's note<span class="cite">2</span><span class="cite">3</span>.</p>
+            </div>
+            <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
+              <span class="tool-trace"><span class="dot"></span>search_sources <span style="color: var(--ink-3);">·</span> "EU hosting" <span style="color: var(--ink-3);">· 8 hits</span></span>
+              <span class="tool-trace"><span class="dot"></span>read_file <span style="color: var(--ink-3);">·</span> docs/PRD.md</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div>
+          <div class="eyebrow" style="margin-bottom: 12px;">Citation pill</div>
+          <div class="surface" style="padding: 24px;">
+            <p style="margin: 0; font-size: 14.5px; line-height: 1.65;">
+              Inline. Mono. Numbered. Hover to see source <span class="cite">1</span>. Click to open the source panel <span class="cite">2</span>. Never breaks the flow of the sentence <span class="cite">3</span>.
+            </p>
+          </div>
+        </div>
+        <div>
+          <div class="eyebrow" style="margin-bottom: 12px;">Memory update — drafts wait for the user</div>
+          <div class="memory-card">
+            <div class="head">
+              <span>◐ Memory · proposed update</span>
+              <span class="pill pill-accent" style="margin-left: auto;">Draft</span>
+            </div>
+            <div class="body">
+              Add to <strong>DECISIONS.md</strong> → <em>"Hosting region for Samsung pilot will be Germany (eu-central-1). Reviewed by Tomas, 2026-04-25."</em>
+            </div>
+            <div class="actions">
+              <button class="btn btn-primary btn-sm">Save to memory</button>
+              <button class="btn btn-secondary btn-sm">Edit draft</button>
+              <button class="btn btn-ghost btn-sm">Discard</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="eyebrow" style="margin-bottom: 12px;">Streaming state</div>
+        <div class="ai-surface" style="padding: 18px 20px; display: flex; align-items: center; gap: 14px;">
+          <div style="display: flex; gap: 4px;">
+            <span class="dot-stream" style="--i:0"></span>
+            <span class="dot-stream" style="--i:1"></span>
+            <span class="dot-stream" style="--i:2"></span>
+          </div>
+          <span style="font-size: 13px; color: var(--ink-2);">Reading <span class="mono">PRD.md</span> and 4 other sources…</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  Designed for the Advisor team · Use the <a href="prototype.html">prototype</a> to see the system in motion.
+</footer>
+
+<style>
+  .dot-stream {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
+    animation: streamPulse 1.2s var(--ease) infinite;
+    animation-delay: calc(var(--i) * 160ms);
+  }
+  @keyframes streamPulse {
+    0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+    30% { opacity: 1; transform: translateY(-2px); }
+  }
+</style>
+
+<script>
+  // theme toggle
+  const root = document.documentElement;
+  document.querySelectorAll("[data-theme-set]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const v = btn.dataset.themeSet;
+      root.dataset.theme = v;
+      document.querySelectorAll("[data-theme-set]").forEach(b => b.setAttribute("aria-pressed", b === btn ? "true" : "false"));
+    });
+  });
+
+  // accent toggle
+  const readout = document.getElementById("accent-readout");
+  document.querySelectorAll("[data-accent-set]").forEach(card => {
+    card.addEventListener("click", () => {
+      const v = card.dataset.accentSet;
+      root.dataset.accent = v;
+      document.querySelectorAll("[data-accent-set]").forEach(c => c.setAttribute("aria-pressed", c === card ? "true" : "false"));
+      if (readout) readout.textContent = v.charAt(0).toUpperCase() + v.slice(1);
+    });
+  });
+</script>
+</body>
+</html>

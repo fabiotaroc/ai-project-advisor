@@ -188,6 +188,7 @@ export function SourcesPanel({
   const searchParams = useSearchParams();
   const citedSourceId = searchParams.get("source");
   const citedChunkId = searchParams.get("chunk");
+  const citedEditId = searchParams.get("edit");
   const gridRef = useRef<HTMLDivElement>(null);
   const [sources, setSources] = useState(initialSources);
   const [sourceListWidth, setSourceListWidth] = useState(SOURCE_LIST_DEFAULT_WIDTH);
@@ -428,6 +429,7 @@ export function SourcesPanel({
           source={selected}
           projectId={projectId}
           citationChunkId={selected?.id === activeCitation?.sourceId ? activeCitation.chunkId : null}
+          deepLinkEditId={selected?.id === citedSourceId ? citedEditId : null}
           onRetry={retryIngestion}
           retryingSourceId={retryingSourceId}
           onSourceReplaced={handleSourceReplaced}
@@ -658,6 +660,7 @@ function SourceDetail({
   source,
   projectId,
   citationChunkId,
+  deepLinkEditId,
   onRetry,
   retryingSourceId,
   onSourceReplaced,
@@ -669,6 +672,7 @@ function SourceDetail({
   source: SourceMaterialDetail | null;
   projectId: string;
   citationChunkId: string | null;
+  deepLinkEditId: string | null;
   onRetry: (sourceId: string) => void;
   retryingSourceId: string | null;
   onSourceReplaced: (source: SourceMaterialDetail) => void;
@@ -678,6 +682,7 @@ function SourceDetail({
   const [selectedEdit, setSelectedEdit] = useState<PendingWikiEdit | null>(null);
   const [diffViewerOpen, setDiffViewerOpen] = useState(false);
   const [pendingEditsRefreshKey, setPendingEditsRefreshKey] = useState(0);
+  const [appliedDeepLinkEditId, setAppliedDeepLinkEditId] = useState<string | null>(null);
   const diffReturnFocusRef = useRef<HTMLElement | null>(null);
 
   const handleSelectEdit = useCallback((edit: PendingWikiEdit) => {
@@ -686,6 +691,31 @@ function SourceDetail({
     setSelectedEdit(edit);
     setDiffViewerOpen(true);
   }, []);
+
+  // Deep-link from activity: ?edit=<id> opens the drawer focused on that
+  // edit. We fetch the edit row to seed the drawer's selection.
+  useEffect(() => {
+    if (!deepLinkEditId || !source) return;
+    if (appliedDeepLinkEditId === deepLinkEditId) return;
+    setAppliedDeepLinkEditId(deepLinkEditId);
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/wiki/pending-edits/${deepLinkEditId}`);
+        const payload = (await response.json()) as { edit?: PendingWikiEdit };
+        if (cancelled || !response.ok || !payload.edit) return;
+        setSelectedEdit(payload.edit);
+        setDiffViewerOpen(true);
+      } catch {
+        // Silent: the source still loads even if the deep link fails.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [appliedDeepLinkEditId, deepLinkEditId, source]);
 
   const refreshPendingEdits = useCallback(() => {
     setPendingEditsRefreshKey((key) => key + 1);

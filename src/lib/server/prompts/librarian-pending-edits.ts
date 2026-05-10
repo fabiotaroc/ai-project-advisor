@@ -4,25 +4,35 @@ import { z } from "zod";
 
 // Used by extractPendingEditsFromSource in src/lib/server/librarian/extract-pending-edits.ts.
 export const LIBRARIAN_PENDING_EDITS_SYSTEM_PROMPT = [
-  "You extract structured, append-only proposals from a single ingested source into a fixed set of canonical project docs.",
+  "You extract structured proposals from a single ingested source into a fixed set of canonical project docs.",
   "Your output is reviewed by a human before any doc is touched. Be precise, be conservative.",
+  "",
+  "Edit kinds:",
+  "- 'add' — insert new content. Set inserted_text. Leave deleted_text null.",
+  "- 'update' — replace an existing span in the target doc body. Set BOTH deleted_text (verbatim copy of the existing span as it appears in the doc) AND inserted_text (the replacement). Use this when the source materially refines or corrects an existing fact.",
+  "- 'remove' is NOT supported from ingestion in this version. Do not emit deletion-only candidates.",
   "",
   "Rules:",
   "- Only emit a candidate when the source genuinely warrants it. Empty output is a valid response.",
-  "- inserted_text must be a single self-contained markdown fragment — typically a bullet, a short paragraph, or a small list. No deletions, no rewrites of existing content.",
-  "- Always include a brief source citation in the inserted_text, formatted like ` (from \"<source title>\")`.",
+  "- inserted_text must be a single self-contained markdown fragment — typically a bullet, a short paragraph, or a small list.",
+  "- For 'update', deleted_text must match an existing span in the shown target doc body, including punctuation/whitespace.",
+  "- Always include a brief source citation in the inserted_text for 'add', formatted like ` (from \"<source title>\")`. For 'update', include the citation only if the original span did not already cite this source.",
   "- Pick target_doc_slug from the list below. Do not invent new slugs.",
   "- For meetings: extract decisions → decisions, action items / WIP / blockers → work, attendee role notes → people, defined terms → glossary.",
   "- For email/file/note sources: extract only when the signal is clear (a stated decision, a clear ownership note, a new defined term). When in doubt, skip.",
   "- confidence: 0.9+ only when the source explicitly states the fact; 0.5–0.8 when it's strongly implied; below 0.5 should usually not be emitted.",
   "",
-  "Anchor rules:",
+  "Anchor rules (used for 'add' edits):",
   "- If a relevant existing heading appears in the full target doc body shown below, set anchor_heading to that heading text (verbatim, including leading hashes).",
   "- Do not invent headings. If no shown heading fits, leave anchor_heading null and the doc reviewer will pick a location.",
   "- anchor_before / anchor_after are optional context strings to help repositioning if the doc has changed; use null if you don't have a specific neighboring sentence.",
 ].join("\n");
 
 export const librarianPendingEditCandidateSchema = z.object({
+  edit_kind: z
+    .enum(["add", "update"])
+    .default("add")
+    .describe("Whether this proposal adds new content or updates an existing span."),
   target_doc_slug: z.string().describe(
     "Slug of the canonical doc this update targets. Must be one of the slugs from the available docs.",
   ),
@@ -38,9 +48,15 @@ export const librarianPendingEditCandidateSchema = z.object({
     .string()
     .nullable()
     .describe("Up to 120 chars of text expected to appear immediately AFTER the insertion point. Null if appending to end of section."),
+  deleted_text: z
+    .string()
+    .nullable()
+    .describe(
+      "For 'update' edits, the verbatim existing span in the target doc to be replaced. Null for 'add'.",
+    ),
   inserted_text: z
     .string()
-    .describe("The markdown text to insert. Append-only — never include deletions or rewrites."),
+    .describe("The markdown text to insert (or replacement text for an update)."),
   reason: z
     .string()
     .describe("One sentence explaining why this update is appropriate based on the source."),

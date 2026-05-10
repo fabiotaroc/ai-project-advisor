@@ -114,6 +114,11 @@ export async function extractPendingEditsFromSource({
     if (c.anchor_before) anchor.before = c.anchor_before.slice(-240);
     if (c.anchor_after) anchor.after = c.anchor_after.slice(0, 240);
 
+    // Ingestion is restricted to add + update by the prompt; the schema
+    // check on pending_wiki_edits also blocks ingestion-origin removals.
+    const isUpdate =
+      c.edit_kind === "update" && typeof c.deleted_text === "string" && c.deleted_text.trim().length > 0;
+
     return {
       project_id: projectId,
       target_doc_id: doc.id,
@@ -121,7 +126,7 @@ export async function extractPendingEditsFromSource({
       origin: "ingestion" as const,
       anchor,
       inserted_text: c.inserted_text.slice(0, MAX_INSERTED_TEXT_CHARS),
-      deleted_text: null,
+      deleted_text: isUpdate ? c.deleted_text!.slice(0, MAX_INSERTED_TEXT_CHARS) : null,
       reason: c.reason,
       confidence: c.confidence,
       created_by: userId,

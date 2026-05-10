@@ -402,8 +402,14 @@ export async function getActivity(projectId: string): Promise<ProjectActivity> {
   if (eventsResult.error) throw eventsResult.error;
   if (runsResult.error) throw runsResult.error;
 
+  const events = await enrichActivityEvents(
+    (eventsResult.data ?? [])
+      .map(normalizeActivityEvent)
+      .filter((event) => event.event_type !== "wiki_edit_rejected"),
+  );
+
   return {
-    events: (eventsResult.data ?? []).map(normalizeActivityEvent),
+    events,
     librarianRuns: (runsResult.data ?? []).map(normalizeLibrarianRun),
   };
 }
@@ -419,7 +425,82 @@ function normalizeActivityEvent(row: Record<string, unknown>): ActivityEvent {
     target_id: asNullableString(row.target_id),
     metadata: asRecord(row.metadata),
     created_at: String(row.created_at),
+    actor: null,
+    wiki_edit: null,
   };
+}
+
+async function enrichActivityEvents(events: ActivityEvent[]): Promise<ActivityEvent[]> {
+  const actorIds = Array.from(
+    new Set(events.map((event) => event.actor_id).filter((id): id is string => Boolean(id))),
+  );
+  const acceptedWikiEditIds = Array.from(
+    new Set(
+      events
+        .filter((event) => event.event_type === "wiki_edit_accepted" && event.target_id)
+        .map((event) => event.target_id as string),
+    ),
+  );
+
+  if (actorIds.length === 0 && acceptedWikiEditIds.length === 0) return events;
+
+  const admin = createSupabaseAdminClient();
+  const [profilesResult, editsResult] = await Promise.all([
+    actorIds.length > 0
+      ? admin.from("profiles").select("id,name,email,avatar_url").in("id", actorIds)
+      : Promise.resolve({ data: [], error: null } as const),
+    acceptedWikiEditIds.length > 0
+      ? admin
+          .from("pending_wiki_edits")
+          .select(
+            "id,origin,target_doc_id,source_material_id,inserted_text,deleted_text,reason,canonical_docs(id,title,slug),source_materials(id,title)",
+          )
+          .in("id", acceptedWikiEditIds)
+      : Promise.resolve({ data: [], error: null } as const),
+  ]);
+
+  if (profilesResult.error) throw profilesResult.error;
+  if (editsResult.error) throw editsResult.error;
+
+  const actorsById = new Map<string, NonNullable<ActivityEvent["actor"]>>();
+  for (const row of profilesResult.data ?? []) {
+    actorsById.set(String(row.id), {
+      id: String(row.id),
+      name: asNullableString(row.name),
+      email: asNullableString(row.email),
+      avatar_url: asNullableString(row.avatar_url),
+    });
+  }
+
+  const editsById = new Map<string, NonNullable<ActivityEvent["wiki_edit"]>>();
+  for (const rawRow of editsResult.data ?? []) {
+    const row = rawRow as Record<string, unknown>;
+    const doc = asRelatedRow(row.canonical_docs);
+    if (!doc) continue;
+    const source = asRelatedRow(row.source_materials);
+    const origin = row.origin === "chat" ? "chat" : "ingestion";
+
+    editsById.set(String(row.id), {
+      origin,
+      target_doc_id: String(row.target_doc_id),
+      target_doc_title: String(doc.title ?? "Wiki"),
+      target_doc_slug: String(doc.slug ?? ""),
+      source_material_id: asNullableString(row.source_material_id),
+      source_title: source ? asNullableString(source.title) : null,
+      inserted_text: typeof row.inserted_text === "string" ? row.inserted_text : "",
+      deleted_text: asNullableString(row.deleted_text),
+      reason: asNullableString(row.reason),
+    });
+  }
+
+  return events.map((event) => ({
+    ...event,
+    actor: event.actor_id ? actorsById.get(event.actor_id) ?? null : null,
+    wiki_edit:
+      event.event_type === "wiki_edit_accepted" && event.target_id
+        ? editsById.get(event.target_id) ?? null
+        : null,
+  }));
 }
 
 function normalizeLibrarianRun(row: Record<string, unknown>): LibrarianRun {
@@ -452,6 +533,15 @@ function asNullableString(value: unknown): string | null {
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
+function asRelatedRow(value: unknown): Record<string, unknown> | null {
+  if (Array.isArray(value)) {
+    const first = value[0];
+    return first && typeof first === "object" ? (first as Record<string, unknown>) : null;
+  }
+  if (!value || typeof value !== "object") return null;
   return value as Record<string, unknown>;
 }
 

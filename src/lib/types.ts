@@ -95,6 +95,27 @@ export type ActivityEvent = {
   target_id: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
+  actor: ActivityActor | null;
+  wiki_edit: WikiActivityEdit | null;
+};
+
+export type ActivityActor = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+};
+
+export type WikiActivityEdit = {
+  origin: "ingestion" | "chat";
+  target_doc_id: string;
+  target_doc_title: string;
+  target_doc_slug: string;
+  source_material_id: string | null;
+  source_title: string | null;
+  inserted_text: string;
+  deleted_text: string | null;
+  reason: string | null;
 };
 
 export type LibrarianAction = {
@@ -217,6 +238,8 @@ export type PendingWikiEdit = {
   created_at: string;
   resolved_at: string | null;
   target_doc: CanonicalDoc | null;
+  /** Joined from source_materials when available; null for chat-origin edits. */
+  source_title: string | null;
 };
 
 export type PendingWikiEditGroup = {

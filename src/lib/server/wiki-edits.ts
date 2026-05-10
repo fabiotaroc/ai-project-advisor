@@ -10,23 +10,16 @@ import type {
   PendingWikiEditGroup,
   PendingWikiEditStatus,
 } from "@/lib/types";
+import {
+  applyPatchToBody,
+  classifyPatchType,
+  type PatchApplication,
+  type PendingEditPatchType,
+} from "@/lib/wiki-patches";
 
 type PendingEditRow = Record<string, unknown> & {
   target_doc?: Record<string, unknown> | Record<string, unknown>[] | null;
   source?: Record<string, unknown> | Record<string, unknown>[] | null;
-};
-
-type Anchor = {
-  heading?: string;
-  before?: string;
-  after?: string;
-};
-
-type ResolveLocation = {
-  body: string;
-  repositioned: boolean;
-  fallbackApplied: boolean;
-  locationNote: string;
 };
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -55,6 +48,7 @@ function mapCanonicalDoc(row: Record<string, unknown>): CanonicalDoc {
 
 function mapPendingEdit(row: PendingEditRow): PendingWikiEdit {
   const targetDoc = firstObject(row.target_doc);
+  const source = firstObject(row.source);
   return {
     id: String(row.id),
     project_id: String(row.project_id),
@@ -75,6 +69,7 @@ function mapPendingEdit(row: PendingEditRow): PendingWikiEdit {
     created_at: String(row.created_at),
     resolved_at: typeof row.resolved_at === "string" ? row.resolved_at : null,
     target_doc: targetDoc ? mapCanonicalDoc(targetDoc) : null,
+    source_title: typeof source?.title === "string" ? source.title : null,
   };
 }
 
@@ -101,6 +96,13 @@ function groupEdits(edits: PendingWikiEdit[]): PendingWikiEditGroup[] {
   return [...groups.values()];
 }
 
+const SELECT_COLUMNS = [
+  "id,project_id,target_doc_id,source_material_id,origin,anchor,inserted_text,deleted_text",
+  "reason,confidence,status,repositioned,fallback_applied,created_by,resolved_by,created_at,resolved_at",
+  "target_doc:canonical_docs(id,project_id,slug,title,body,is_default,is_pinned,created_at,updated_at)",
+  "source:source_materials(id,title)",
+].join(",");
+
 export async function listPendingEditsForSource(
   sourceId: string,
 ): Promise<PendingWikiEditGroup[]> {
@@ -110,14 +112,40 @@ export async function listPendingEditsForSource(
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("pending_wiki_edits")
-    .select(
-      [
-        "id,project_id,target_doc_id,source_material_id,origin,anchor,inserted_text,deleted_text",
-        "reason,confidence,status,repositioned,fallback_applied,created_by,resolved_by,created_at,resolved_at",
-        "target_doc:canonical_docs(id,project_id,slug,title,body,is_default,is_pinned,created_at,updated_at)",
-      ].join(","),
-    )
+    .select(SELECT_COLUMNS)
     .eq("source_material_id", sourceId)
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+  return groupEdits(((data ?? []) as unknown as PendingEditRow[]).map(mapPendingEdit));
+}
+
+export async function listPendingEditsForProjectDoc(
+  projectId: string,
+  targetDocId: string,
+): Promise<PendingWikiEditGroup[]> {
+  await requireProjectAccess(projectId);
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("pending_wiki_edits")
+    .select(SELECT_COLUMNS)
+    .eq("project_id", projectId)
+    .eq("target_doc_id", targetDocId)
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+  return groupEdits(((data ?? []) as unknown as PendingEditRow[]).map(mapPendingEdit));
+}
+
+export async function listPendingEditsForProject(
+  projectId: string,
+): Promise<PendingWikiEditGroup[]> {
+  await requireProjectAccess(projectId);
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("pending_wiki_edits")
+    .select(SELECT_COLUMNS)
+    .eq("project_id", projectId)
     .order("created_at", { ascending: true });
 
   if (error) throw error;
@@ -141,18 +169,37 @@ export async function acceptPendingEdit(editId: string): Promise<PendingWikiEdit
   if (!edit.target_doc) throw new Error("Target canonical doc not found.");
   if (edit.status !== "pending") throw new Error(`Pending edit is already ${edit.status}.`);
 
-  const sourceTitle = await getSourceTitle(edit.source_material_id);
-  const insertion = withSourceCitation(edit.inserted_text, sourceTitle, edit.source_material_id);
-  const resolved = resolveInsertionLocation(edit.target_doc.body, edit.anchor, insertion);
+  const sourceTitle = edit.source_title ?? (await getSourceTitle(edit.source_material_id));
+  const patchType = classifyPatchType(edit.inserted_text, edit.deleted_text);
+  const insertion = withSourceCitation(
+    edit.inserted_text,
+    sourceTitle,
+    edit.source_material_id,
+    patchType,
+  );
+  const application = applyPatchToBody({
+    body: edit.target_doc.body,
+    insertedText: insertion,
+    deletedText: edit.deleted_text,
+    anchor: edit.anchor,
+    patchType,
+  });
+
+  if (application.status === "stale") {
+    throw new Error(
+      `Cannot apply edit: the canonical doc has changed since this proposal was created. ${application.locationNote}`,
+    );
+  }
 
   await resolvePendingEditRpc({
     editId,
     action: "accept",
     resolvedBy: userId,
-    newBody: resolved.body,
-    repositioned: resolved.repositioned,
-    fallbackApplied: resolved.fallbackApplied,
-    locationNote: resolved.locationNote,
+    newBody: application.body,
+    repositioned: application.repositioned,
+    fallbackApplied: application.fallbackApplied,
+    locationNote: application.locationNote,
+    patchType,
   });
 
   return getPendingEditForResolve(editId);
@@ -171,6 +218,7 @@ export async function rejectPendingEdit(editId: string): Promise<PendingWikiEdit
     repositioned: false,
     fallbackApplied: false,
     locationNote: null,
+    patchType: classifyPatchType(edit.inserted_text, edit.deleted_text),
   });
 
   return getPendingEditForResolve(editId);
@@ -182,6 +230,28 @@ export async function bulkResolveEditsForSource(
 ): Promise<{ results: PendingWikiEdit[]; errors: { editId: string; error: string }[] }> {
   const groups = await listPendingEditsForSource(sourceId);
   const pending = groups.flatMap((group) => group.edits).filter((edit) => edit.status === "pending");
+  return runBulkResolve(pending, action);
+}
+
+export async function bulkResolveEditsForProjectDoc(
+  projectId: string,
+  targetDocId: string,
+  action: "accept" | "reject",
+  editIds?: string[],
+): Promise<{ results: PendingWikiEdit[]; errors: { editId: string; error: string }[] }> {
+  const groups = await listPendingEditsForProjectDoc(projectId, targetDocId);
+  let pending = groups.flatMap((group) => group.edits).filter((edit) => edit.status === "pending");
+  if (editIds && editIds.length > 0) {
+    const allowed = new Set(editIds);
+    pending = pending.filter((edit) => allowed.has(edit.id));
+  }
+  return runBulkResolve(pending, action);
+}
+
+async function runBulkResolve(
+  pending: PendingWikiEdit[],
+  action: "accept" | "reject",
+): Promise<{ results: PendingWikiEdit[]; errors: { editId: string; error: string }[] }> {
   const results: PendingWikiEdit[] = [];
   const errors: { editId: string; error: string }[] = [];
 
@@ -265,6 +335,14 @@ async function getSourceForCurrentUser(sourceId: string) {
   return data;
 }
 
+async function requireProjectAccess(projectId: string) {
+  const user = await getOptionalSessionUser();
+  if (!user) throw new Error("Unauthorized");
+  const access = await getProjectAccessForUser(user.id, projectId);
+  if (!access) throw new Error("Forbidden");
+  return { userId: user.id, access };
+}
+
 async function requireWriteAccessForEdit(editId: string) {
   const user = await getOptionalSessionUser();
   if (!user) throw new Error("Unauthorized");
@@ -290,13 +368,7 @@ async function getPendingEditForResolve(editId: string): Promise<PendingWikiEdit
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin
     .from("pending_wiki_edits")
-    .select(
-      [
-        "id,project_id,target_doc_id,source_material_id,origin,anchor,inserted_text,deleted_text",
-        "reason,confidence,status,repositioned,fallback_applied,created_by,resolved_by,created_at,resolved_at",
-        "target_doc:canonical_docs(id,project_id,slug,title,body,is_default,is_pinned,created_at,updated_at)",
-      ].join(","),
-    )
+    .select(SELECT_COLUMNS)
     .eq("id", editId)
     .single();
 
@@ -325,6 +397,7 @@ async function resolvePendingEditRpc({
   repositioned,
   fallbackApplied,
   locationNote,
+  patchType,
 }: {
   editId: string;
   action: "accept" | "reject";
@@ -333,8 +406,13 @@ async function resolvePendingEditRpc({
   repositioned: boolean;
   fallbackApplied: boolean;
   locationNote: string | null;
+  patchType: PendingEditPatchType;
 }) {
   const admin = createSupabaseAdminClient();
+  const note =
+    locationNote === null
+      ? `patch_type=${patchType}`
+      : `${locationNote} patch_type=${patchType}`;
   const { error } = await admin.rpc("resolve_pending_wiki_edit", {
     p_edit_id: editId,
     p_action: action,
@@ -342,127 +420,24 @@ async function resolvePendingEditRpc({
     p_new_body: newBody,
     p_repositioned: repositioned,
     p_fallback_applied: fallbackApplied,
-    p_location_note: locationNote,
+    p_location_note: note,
   });
 
   if (error) throw error;
 }
 
-function withSourceCitation(text: string, sourceTitle: string | null, sourceId: string | null) {
+function withSourceCitation(
+  text: string,
+  sourceTitle: string | null,
+  sourceId: string | null,
+  patchType: PendingEditPatchType,
+) {
   const trimmed = text.trim();
   if (!sourceId) return trimmed;
+  if (patchType === "remove") return trimmed;
   const label = sourceTitle ? `${sourceTitle} (${sourceId})` : sourceId;
+  if (patchType === "update") return trimmed;
   return `${trimmed}\n\n_Source: ${label}_`;
 }
 
-export function resolveInsertionLocation(
-  currentBody: string,
-  rawAnchor: Record<string, unknown>,
-  insertion: string,
-): ResolveLocation {
-  const anchor = normalizeAnchor(rawAnchor);
-  const body = currentBody.trimEnd();
-
-  if (anchor.heading) {
-    const exact = findHeadingSection(body, anchor.heading, "exact");
-    if (exact) {
-      return insertAt(body, exact.end, insertion, {
-        repositioned: false,
-        fallbackApplied: false,
-        locationNote: `Inserted under "${exact.heading}".`,
-      });
-    }
-
-    const bestEffort = findHeadingSection(body, anchor.heading, "best-effort");
-    if (bestEffort) {
-      return insertAt(body, bestEffort.end, insertion, {
-        repositioned: true,
-        fallbackApplied: false,
-        locationNote: `Repositioned under "${bestEffort.heading}".`,
-      });
-    }
-  }
-
-  if (anchor.before) {
-    const index = body.indexOf(anchor.before);
-    if (index >= 0) {
-      return insertAt(body, index + anchor.before.length, insertion, {
-        repositioned: Boolean(anchor.heading),
-        fallbackApplied: false,
-        locationNote: "Inserted after matching anchor context.",
-      });
-    }
-  }
-
-  return insertAt(body, body.length, insertion, {
-    repositioned: false,
-    fallbackApplied: true,
-    locationNote: "Appended at end of doc.",
-  });
-}
-
-function normalizeAnchor(rawAnchor: Record<string, unknown>): Anchor {
-  return {
-    heading: normalizeOptionalString(rawAnchor.heading),
-    before: normalizeOptionalString(rawAnchor.before),
-    after: normalizeOptionalString(rawAnchor.after),
-  };
-}
-
-function normalizeOptionalString(value: unknown) {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  return trimmed ? trimmed : undefined;
-}
-
-function normalizeMatch(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[#*_`[\]()]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function findHeadingSection(body: string, target: string, mode: "exact" | "best-effort") {
-  const headings = [...body.matchAll(/^(#{1,6})\s+(.+)$/gm)].map((match) => ({
-    start: match.index ?? 0,
-    endOfLine: (match.index ?? 0) + match[0].length,
-    level: match[1].length,
-    heading: match[2].trim(),
-  }));
-  const normalizedTarget = normalizeMatch(target);
-
-  for (let index = 0; index < headings.length; index += 1) {
-    const heading = headings[index];
-    const normalizedHeading = normalizeMatch(heading.heading);
-    const matches =
-      mode === "exact"
-        ? normalizedHeading === normalizedTarget
-        : normalizedHeading.includes(normalizedTarget) ||
-          normalizedTarget.includes(normalizedHeading);
-
-    if (!matches) continue;
-
-    const nextPeer = headings
-      .slice(index + 1)
-      .find((candidate) => candidate.level <= heading.level);
-    return {
-      heading: heading.heading,
-      end: nextPeer ? nextPeer.start : body.length,
-    };
-  }
-
-  return null;
-}
-
-function insertAt(
-  body: string,
-  index: number,
-  insertion: string,
-  meta: Omit<ResolveLocation, "body">,
-): ResolveLocation {
-  const before = body.slice(0, index).trimEnd();
-  const after = body.slice(index).trimStart();
-  const nextBody = [before, insertion.trim(), after].filter(Boolean).join("\n\n");
-  return { body: nextBody, ...meta };
-}
+export type { PatchApplication };

@@ -1,0 +1,757 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Activity — UI Refresh Prototype</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+
+        --paper: oklch(1 0 0);
+        --paper-2: oklch(0.985 0 0);
+        --paper-3: oklch(0.965 0 0);
+        --line: oklch(0.918 0 0);
+        --line-strong: oklch(0.87 0 0);
+        --ink-1: oklch(0.205 0 0);
+        --ink-2: oklch(0.42 0 0);
+        --ink-3: oklch(0.58 0 0);
+        --ink-4: oklch(0.7 0 0);
+
+        --iris: oklch(0.515 0.135 275);
+        --accent-soft: oklch(0.955 0.025 275);
+        --accent-soft-2: oklch(0.925 0.045 275);
+        --accent-line: oklch(0.88 0.06 275);
+        --accent-ink: oklch(0.38 0.14 275);
+        --ai-surface: oklch(0.978 0.012 275);
+        --ai-line: oklch(0.92 0.025 275);
+        --cite-bg: oklch(0.945 0.02 275);
+
+        --success: oklch(0.555 0.11 155);
+        --success-soft: oklch(0.955 0.03 155);
+        --success-line: oklch(0.88 0.06 155);
+        --warning: oklch(0.64 0.13 70);
+        --warning-soft: oklch(0.965 0.04 75);
+        --warning-line: oklch(0.88 0.08 75);
+
+        --background: var(--paper-2);
+        --foreground: var(--ink-1);
+        --card: var(--paper);
+        --muted: var(--paper-3);
+        --muted-foreground: var(--ink-2);
+        --border: var(--line);
+        --ring: var(--iris);
+
+        --radius: 0.625rem;
+        --radius-md: calc(var(--radius) * 0.8);
+        --radius-lg: var(--radius);
+        --radius-xl: calc(var(--radius) * 1.4);
+      }
+
+      * {
+        box-sizing: border-box;
+        border-color: var(--border);
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      html {
+        font-family: "Inter", system-ui, -apple-system, sans-serif;
+        font-feature-settings: "ss01", "cv11";
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+        background: var(--background);
+        color: var(--foreground);
+      }
+      .mono {
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+      }
+
+      /* Layout */
+      .page {
+        max-width: 64rem; /* max-w-5xl */
+        margin: 0 auto;
+        padding: 2.5rem 2.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+      }
+
+      /* Header */
+      .header {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .header-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.25rem 1rem;
+      }
+      h1 {
+        font-size: 1.875rem;
+        line-height: 1.15;
+        font-weight: 500;
+        letter-spacing: -0.02em;
+        margin: 0;
+      }
+      .subtitle {
+        font-size: 0.9375rem;
+        color: var(--muted-foreground);
+        margin: 0;
+      }
+      .collapse-btn {
+        font-size: 11px;
+        color: var(--muted-foreground);
+        background: transparent;
+        border: 0;
+        cursor: pointer;
+        padding: 0.125rem 0.5rem;
+        height: 1.5rem;
+        border-radius: 0.375rem;
+      }
+      .collapse-btn:hover {
+        color: var(--foreground);
+        background: oklch(from var(--muted) l c h / 0.6);
+      }
+
+      /* Card / list */
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        overflow: hidden;
+      }
+      ol.list,
+      ul.list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .day {
+        border-bottom: 1px solid var(--border);
+      }
+      .day:last-child {
+        border-bottom: 0;
+      }
+      .day-summary {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        background: oklch(from var(--muted) l c h / 0.3);
+        border-bottom: 1px solid var(--border);
+        padding: 0.5rem 1.25rem;
+        cursor: pointer;
+        list-style: none;
+        user-select: none;
+      }
+      .day-summary::-webkit-details-marker {
+        display: none;
+      }
+      .day-label {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 0.5rem;
+      }
+      .chev {
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+        transform: translateY(1px);
+        color: var(--muted-foreground);
+        transition: transform 150ms ease;
+      }
+      details[open] > .day-summary .chev,
+      details[open] > .row-summary .chev-end {
+        transform: rotate(90deg) translateX(1px);
+      }
+      .day-name {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        color: var(--muted-foreground);
+      }
+      .day-count {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 10.5px;
+        color: oklch(from var(--muted-foreground) l c h / 0.7);
+      }
+
+      .row {
+        position: relative;
+      }
+      .row + .row {
+        border-top: 1px solid var(--border);
+      }
+      .row-summary {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.875rem 1.25rem;
+        cursor: pointer;
+        list-style: none;
+        transition: background 120ms ease;
+      }
+      .row-summary::-webkit-details-marker {
+        display: none;
+      }
+      .row-summary:hover {
+        background: oklch(from var(--muted) l c h / 0.3);
+      }
+      .row-summary.no-detail {
+        cursor: default;
+      }
+      .timestamp {
+        margin-top: 3px;
+        width: 78px;
+        flex-shrink: 0;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        color: var(--muted-foreground);
+      }
+      .glyph {
+        margin-top: 1px;
+        display: grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        flex-shrink: 0;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        font-size: 11px;
+      }
+      .glyph.quiet {
+        background: oklch(from var(--muted) l c h / 0.5);
+        color: var(--muted-foreground);
+      }
+      .glyph.ai {
+        background: var(--foreground);
+        border-color: var(--foreground);
+        color: var(--background);
+      }
+      .glyph.user {
+        background: var(--accent-soft);
+        border-color: var(--accent-line);
+        color: var(--accent-ink);
+        font-weight: 600;
+        font-size: 10px;
+        letter-spacing: 0.02em;
+      }
+      .glyph svg {
+        width: 14px;
+        height: 14px;
+      }
+      .body {
+        min-width: 0;
+        flex: 1;
+      }
+      .head-line {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+      }
+      .headline {
+        min-width: 0;
+        flex: 1;
+        font-size: 13.5px;
+        line-height: 1.45;
+        color: var(--foreground);
+        margin: 0;
+      }
+      .headline a {
+        color: inherit;
+        text-decoration: none;
+      }
+      .headline a:hover {
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .headline .actor {
+        font-weight: 500;
+      }
+      .headline .doc {
+        font-weight: 500;
+      }
+      .dot {
+        margin: 0 0.375rem;
+        color: var(--muted-foreground);
+      }
+      .sub {
+        margin: 0.25rem 0 0;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--muted-foreground);
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .summary-text {
+        margin: 0.375rem 0 0;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: oklch(from var(--foreground) l c h / 0.85);
+      }
+
+      /* meta line for wiki rows */
+      .meta-line {
+        margin: 0.25rem 0 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 12px;
+        color: var(--muted-foreground);
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 10.5px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        border: 1px solid var(--border);
+        background: oklch(from var(--muted) l c h / 0.5);
+        color: var(--muted-foreground);
+      }
+      .chip.manual {
+        background: var(--accent-soft);
+        border-color: var(--accent-line);
+        color: var(--accent-ink);
+      }
+      .chip.ingestion {
+        background: oklch(from var(--success-soft) l c h / 0.7);
+        border-color: var(--success-line);
+        color: var(--success);
+      }
+      .source-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        color: var(--muted-foreground);
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .source-link:hover {
+        color: var(--foreground);
+      }
+
+      /* Pills/badges (right side) */
+      .pills {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+      }
+      .badge {
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 10.5px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        border: 1px solid transparent;
+      }
+      .badge.secondary {
+        background: oklch(from var(--muted) l c h / 0.6);
+        color: var(--muted-foreground);
+        border-color: var(--border);
+      }
+      .badge.success {
+        background: var(--success-soft);
+        color: var(--success);
+        border-color: var(--success-line);
+      }
+      .badge.warning {
+        background: var(--warning-soft);
+        color: var(--warning);
+        border-color: var(--warning-line);
+      }
+      .chev-end {
+        margin-top: 3px;
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+        color: var(--muted-foreground);
+        transition: transform 150ms ease;
+      }
+
+      /* Run details body */
+      .row-details {
+        padding: 0 1.25rem 1.25rem 7rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .actions-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11.5px;
+      }
+      .actions-list li {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+        min-width: 0;
+      }
+      .actions-list .verb {
+        color: var(--muted-foreground);
+      }
+      .actions-list .path {
+        color: var(--foreground);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .actions-list .reason {
+        color: oklch(from var(--muted-foreground) l c h / 0.85);
+      }
+      .suggestion {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        padding: 0.375rem 0.625rem;
+        border-radius: 6px;
+        background: oklch(from var(--warning-soft) l c h / 0.6);
+        border: 1px solid var(--warning-line);
+        color: var(--warning);
+        font-size: 12.5px;
+      }
+
+      /* diff preview block (optional) */
+      .diff {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11.5px;
+        line-height: 1.5;
+        background: oklch(from var(--muted) l c h / 0.4);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 0.5rem 0.75rem;
+        white-space: pre-wrap;
+      }
+      .diff .ins {
+        background: oklch(from var(--success-soft) l c h / 0.8);
+        color: var(--success);
+        padding: 0 2px;
+        border-radius: 2px;
+      }
+      .diff .del {
+        background: oklch(from var(--warning-soft) l c h / 0.8);
+        color: var(--warning);
+        text-decoration: line-through;
+        padding: 0 2px;
+        border-radius: 2px;
+      }
+
+      .empty {
+        border: 1px dashed var(--border);
+        background: oklch(from var(--card) l c h / 0.6);
+        padding: 2.5rem;
+        text-align: center;
+        font-size: 14px;
+        color: var(--muted-foreground);
+        border-radius: 0.75rem;
+      }
+
+      /* Avatar circle alt */
+      .avatar {
+        margin-top: 1px;
+        display: grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        flex-shrink: 0;
+        border-radius: 999px;
+        background: var(--accent-soft-2);
+        color: var(--accent-ink);
+        font-size: 9.5px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        border: 1px solid var(--accent-line);
+      }
+
+      /* Annotation banner */
+      .note {
+        background: var(--ai-surface);
+        border: 1px solid var(--ai-line);
+        color: var(--accent-ink);
+        font-size: 12.5px;
+        line-height: 1.5;
+        padding: 0.625rem 0.875rem;
+        border-radius: 8px;
+      }
+      .note b {
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="header">
+        <div class="header-row">
+          <h1>Activity</h1>
+          <button class="collapse-btn" type="button">Collapse all</button>
+        </div>
+        <p class="subtitle">
+          What changed in this project — drafts Morgan proposed, sources you added, files
+          Morgan edited.
+        </p>
+      </header>
+
+      <div class="note">
+        <b>Prototype:</b> wiki accepted rows now read as <i>"{Actor} edited {Doc}"</i> with a
+        Manual / From source update chip and a one-sentence summary. Source ingestion and
+        librarian rows are unchanged. Rejected wiki edits are hidden from the timeline.
+      </div>
+
+      <section class="card">
+        <ol class="list">
+          <!-- ============ TODAY ============ -->
+          <li class="day">
+            <details open>
+              <summary class="day-summary">
+                <span class="day-label">
+                  <!-- chevron -->
+                  <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                  <span class="day-name">Today</span>
+                </span>
+                <span class="day-count">4 updates</span>
+              </summary>
+              <ul class="list">
+                <!-- NEW: wiki accepted (manual/chat origin) -->
+                <li class="row">
+                  <details>
+                    <summary class="row-summary">
+                      <span class="timestamp" title="Today, 14:22">14:22</span>
+                      <span class="avatar">TC</span>
+                      <div class="body">
+                        <div class="head-line">
+                          <p class="headline">
+                            <a href="#"><span class="actor">Taro Casalino</span> edited <span class="doc">Work</span></a>
+                          </p>
+                          <span class="pills">
+                            <span class="badge secondary">Wiki</span>
+                          </span>
+                          <svg class="chev-end" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </div>
+                        <div class="meta-line">
+                          <span class="chip manual">Manual change</span>
+                          <span>via chat with Morgan</span>
+                        </div>
+                        <p class="summary-text">
+                          Clarified that the Spring integration owner is Alessio and moved the kickoff date to May 19.
+                        </p>
+                      </div>
+                    </summary>
+                    <div class="row-details">
+                      <div class="diff">
+The integration kickoff is scheduled for <span class="del">May 12</span><span class="ins">May 19</span>, owned by <span class="ins">Alessio</span>.
+                      </div>
+                    </div>
+                  </details>
+                </li>
+
+                <!-- NEW: wiki accepted (ingestion origin) -->
+                <li class="row">
+                  <details>
+                    <summary class="row-summary">
+                      <span class="timestamp" title="Today, 11:08">11:08</span>
+                      <span class="avatar">FT</span>
+                      <div class="body">
+                        <div class="head-line">
+                          <p class="headline">
+                            <a href="#"><span class="actor">Fabio Taroc</span> edited <span class="doc">Risks &amp; blockers</span></a>
+                          </p>
+                          <span class="pills">
+                            <span class="badge secondary">Wiki</span>
+                          </span>
+                          <svg class="chev-end" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </div>
+                        <div class="meta-line">
+                          <span class="chip ingestion">From source update</span>
+                          <a class="source-link" href="#">2026-05-07 10:30 Alessio Taro demo review.md</a>
+                        </div>
+                        <p class="summary-text">
+                          The meeting identified Spring integration and real data access as the remaining blockers.
+                        </p>
+                      </div>
+                    </summary>
+                    <div class="row-details">
+                      <div class="diff">
+Outstanding blockers:
+<span class="ins">- Spring integration handover (Alessio)</span>
+<span class="ins">- Access to real client data for the demo (pending IT)</span>
+                      </div>
+                    </div>
+                  </details>
+                </li>
+
+                <!-- Existing librarian run row (unchanged look) -->
+                <li class="row">
+                  <details>
+                    <summary class="row-summary">
+                      <span class="timestamp" title="Today, 10:31">10:31</span>
+                      <span class="glyph ai">
+                        <!-- sparkle / ai icon -->
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/></svg>
+                      </span>
+                      <div class="body">
+                        <div class="head-line">
+                          <p class="headline">
+                            <a href="#"><span class="actor">Source ingested</span><span class="dot">·</span><span style="color:var(--muted-foreground)">2026-05-07 10:30 Alessio Taro demo review.md</span></a>
+                          </p>
+                          <span class="pills">
+                            <span class="badge success">Done</span>
+                          </span>
+                          <svg class="chev-end" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </div>
+                        <p class="sub">12s · 3 changes · 2 files · 1 suggestion</p>
+                      </div>
+                    </summary>
+                    <div class="row-details">
+                      <p style="margin:0; font-size:13px; line-height:1.55; color:oklch(from var(--foreground) l c h / 0.85);">
+                        Extracted decisions and blockers from the demo review meeting and proposed
+                        edits to <code>Risks &amp; blockers</code> and <code>Work</code>.
+                      </p>
+                      <ul class="actions-list">
+                        <li>
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="transform:translateY(1.5px); color:var(--muted-foreground)"><path d="M12 5v14M5 12h14"/></svg>
+                          <span class="verb">proposed edited</span>
+                          <span class="path">wiki/risks-and-blockers.md</span>
+                          <span class="reason">— two new blockers from meeting</span>
+                        </li>
+                        <li>
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="transform:translateY(1.5px); color:var(--muted-foreground)"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"/></svg>
+                          <span class="verb">proposed edited</span>
+                          <span class="path">wiki/work.md</span>
+                          <span class="reason">— add Spring integration owner</span>
+                        </li>
+                      </ul>
+                      <div class="suggestion">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-top:3px; flex-shrink:0"><path d="M12 2a7 7 0 0 0-4 12.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26A7 7 0 0 0 12 2Z"/><path d="M9 22h6"/></svg>
+                        <div>
+                          <span style="font-weight:500">Add a source for the IT data access request</span>
+                          <span style="margin-left:0.25rem; opacity:0.85">— context is missing on who owns the ticket.</span>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+                </li>
+
+                <!-- Existing source ingested event row (unchanged) -->
+                <li class="row">
+                  <details>
+                    <summary class="row-summary no-detail">
+                      <span class="timestamp" title="Today, 09:48">09:48</span>
+                      <span class="glyph quiet">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                      </span>
+                      <div class="body">
+                        <div class="head-line">
+                          <p class="headline">
+                            <a href="#">Source added<span class="dot">·</span><span style="color:var(--muted-foreground)">Kickoff notes 2026-05-06.pdf</span></a>
+                          </p>
+                        </div>
+                        <p class="sub">Uploaded by Fabio · 12 pages · 18 KB extracted</p>
+                      </div>
+                    </summary>
+                  </details>
+                </li>
+              </ul>
+            </details>
+          </li>
+
+          <!-- ============ YESTERDAY ============ -->
+          <li class="day">
+            <details open>
+              <summary class="day-summary">
+                <span class="day-label">
+                  <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                  <span class="day-name">Yesterday</span>
+                </span>
+                <span class="day-count">2 updates</span>
+              </summary>
+              <ul class="list">
+                <!-- NEW: wiki accepted with no reason — falls back to inserted text -->
+                <li class="row">
+                  <details>
+                    <summary class="row-summary">
+                      <span class="timestamp" title="Yesterday, 17:04">17:04</span>
+                      <span class="avatar">TC</span>
+                      <div class="body">
+                        <div class="head-line">
+                          <p class="headline">
+                            <a href="#"><span class="actor">Taro Casalino</span> updated <span class="doc">Stakeholders</span></a>
+                          </p>
+                          <span class="pills">
+                            <span class="badge secondary">Wiki</span>
+                          </span>
+                          <svg class="chev-end" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </div>
+                        <div class="meta-line">
+                          <span class="chip manual">Manual change</span>
+                        </div>
+                        <p class="summary-text">
+                          Added Maria Conti as the new client-side product owner.
+                        </p>
+                      </div>
+                    </summary>
+                    <div class="row-details">
+                      <div class="diff">
+- Sponsor: Luca Rossi
+<span class="ins">- Product owner (client): Maria Conti</span>
+                      </div>
+                    </div>
+                  </details>
+                </li>
+
+                <!-- Existing source ingested -->
+                <li class="row">
+                  <details>
+                    <summary class="row-summary no-detail">
+                      <span class="timestamp" title="Yesterday, 09:14">09:14</span>
+                      <span class="glyph quiet">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                      </span>
+                      <div class="body">
+                        <div class="head-line">
+                          <p class="headline">
+                            <a href="#">Source added<span class="dot">·</span><span style="color:var(--muted-foreground)">Weekly status — May W1.docx</span></a>
+                          </p>
+                        </div>
+                        <p class="sub">Uploaded by Fabio · 4 pages · 7 KB extracted</p>
+                      </div>
+                    </summary>
+                  </details>
+                </li>
+              </ul>
+            </details>
+          </li>
+        </ol>
+      </section>
+    </main>
+  </body>
+</html>

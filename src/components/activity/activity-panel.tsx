@@ -399,6 +399,19 @@ function EventRow({
   const meta = eventMeta(event);
   const href = eventHrefFor(event, projectId);
 
+  if (event.event_type === "wiki_edit_accepted" && event.wiki_edit) {
+    return (
+      <WikiEventRow
+        event={event}
+        projectId={projectId}
+        rowKey={rowKey}
+        highlighted={highlighted}
+        onRegister={onRegister}
+        onClick={onClick}
+      />
+    );
+  }
+
   return (
     <Row
       rowKey={rowKey}
@@ -428,6 +441,89 @@ function EventRow({
   );
 }
 
+function WikiEventRow({
+  event,
+  projectId,
+  rowKey,
+  highlighted,
+  onRegister,
+  onClick,
+}: { event: ActivityEvent; projectId: string } & RowHighlightProps) {
+  const wikiEdit = event.wiki_edit;
+  if (!wikiEdit) return null;
+
+  const href = eventHrefFor(event, projectId);
+  const actorName = activityActorName(event);
+  const summary = wikiSummary(event);
+  const sourceHref = wikiEdit.source_material_id
+    ? `/project/${projectId}/sources?source=${encodeURIComponent(wikiEdit.source_material_id)}`
+    : null;
+  const verb = wikiEdit.deleted_text ? "updated" : "edited";
+
+  return (
+    <Row
+      rowKey={rowKey}
+      highlighted={highlighted}
+      onRegister={onRegister}
+      onClick={onClick}
+      timestamp={event.created_at}
+      glyph={<ActorGlyph event={event} />}
+      glyphTone="avatar"
+      headline={
+        href ? (
+          <Link href={href} className="hover:underline underline-offset-2">
+            <span className="font-medium">{actorName}</span> {verb}{" "}
+            <span className="font-medium">{wikiEdit.target_doc_title}</span>
+          </Link>
+        ) : (
+          <>
+            <span className="font-medium">{actorName}</span> {verb}{" "}
+            <span className="font-medium">{wikiEdit.target_doc_title}</span>
+          </>
+        )
+      }
+      sub={
+        <div className="mt-1 flex flex-col gap-1.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[11.5px] leading-5">
+            <span
+              className={cn(
+                "inline-flex h-5 items-center rounded-full border px-2 font-medium",
+                wikiEdit.origin === "chat"
+                  ? "border-accent-line bg-accent-soft text-accent-foreground"
+                  : "border-success-line bg-success-soft text-success",
+              )}
+            >
+              {wikiEdit.origin === "chat" ? "Manual change" : "From source update"}
+            </span>
+            {wikiEdit.origin === "chat" ? (
+              <span className="text-muted-foreground">via chat</span>
+            ) : sourceHref && wikiEdit.source_title ? (
+              <Link
+                href={sourceHref}
+                className="min-w-0 truncate text-muted-foreground hover:text-foreground hover:underline underline-offset-2"
+              >
+                {wikiEdit.source_title}
+              </Link>
+            ) : null}
+          </div>
+          <p className="line-clamp-2 text-[12.5px] leading-[1.45] text-foreground/85">
+            {summary}
+          </p>
+        </div>
+      }
+      pill={
+        <Badge
+          variant="secondary"
+          className="rounded-md px-1.5 py-0 text-[10.5px] font-medium uppercase tracking-[0.08em]"
+        >
+          Wiki
+        </Badge>
+      }
+      details={hasWikiChangeDetails(event) ? <WikiChangeDetails event={event} /> : null}
+    />
+  );
+}
+
 function Row({
   rowKey,
   highlighted,
@@ -443,7 +539,7 @@ function Row({
 }: {
   timestamp: string;
   glyph: React.ReactNode;
-  glyphTone: "ai" | "quiet";
+  glyphTone: "ai" | "quiet" | "avatar";
   headline: React.ReactNode;
   sub: React.ReactNode;
   pill: React.ReactNode;
@@ -482,9 +578,10 @@ function Row({
         <span
           className={cn(
             "mt-[1px] grid size-[22px] shrink-0 place-items-center rounded-md border text-[11px]",
-            glyphTone === "ai"
-              ? "border-foreground bg-foreground text-background"
-              : "border-border bg-muted/50",
+            glyphTone === "ai" && "border-foreground bg-foreground text-background",
+            glyphTone === "quiet" && "border-border bg-muted/50",
+            glyphTone === "avatar" &&
+              "border-accent-line bg-accent-soft font-medium text-accent-foreground",
           )}
         >
           {glyph}
@@ -501,13 +598,100 @@ function Row({
             ) : null}
           </div>
           {sub ? (
-            <p className="mt-1 line-clamp-2 text-[12px] leading-[1.45] text-muted-foreground">{sub}</p>
+            <div
+              className={cn(
+                "mt-1 text-[12px] leading-[1.45] text-muted-foreground",
+                typeof sub === "string" && "line-clamp-2",
+              )}
+            >
+              {sub}
+            </div>
           ) : null}
         </div>
       </summary>
       {details ? <div className="px-5 pb-5 pl-[112px]">{details}</div> : null}
     </details>
   );
+}
+
+function ActorGlyph({ event }: { event: ActivityEvent }) {
+  const label = activityActorName(event);
+  return (
+    <span className="grid h-full w-full place-items-center font-mono text-[9.5px] leading-none">
+      {initialsFor(label)}
+    </span>
+  );
+}
+
+function activityActorName(event: ActivityEvent) {
+  return event.actor?.name || event.actor?.email || "Someone";
+}
+
+function initialsFor(value: string) {
+  const parts = value
+    .replace(/@.*/, "")
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+}
+
+function wikiSummary(event: ActivityEvent) {
+  const edit = event.wiki_edit;
+  if (!edit) return event.summary;
+  return (
+    firstSentence(edit.reason) ??
+    firstSentence(event.summary) ??
+    fallbackWikiSummary(edit.inserted_text, edit.deleted_text)
+  );
+}
+
+function firstSentence(value: string | null) {
+  const normalized = normalizeInlineText(value);
+  if (!normalized) return null;
+  const match = normalized.match(/^.*?[.!?](?:\s|$)/);
+  return match ? match[0].trim() : normalized;
+}
+
+function fallbackWikiSummary(insertedText: string, deletedText: string | null) {
+  const text = normalizeInlineText(insertedText);
+  if (!text) return deletedText ? "Updated the wiki entry." : "Edited the wiki.";
+  const clipped = text.length > 180 ? `${text.slice(0, 177).trimEnd()}...` : text;
+  return deletedText ? `Updated wiki text: ${clipped}` : `Added wiki text: ${clipped}`;
+}
+
+function normalizeInlineText(value: string | null | undefined) {
+  return value?.replace(/\s+/g, " ").trim() || null;
+}
+
+function WikiChangeDetails({ event }: { event: ActivityEvent }) {
+  const edit = event.wiki_edit;
+  if (!edit) return null;
+
+  const inserted = normalizeBlockText(edit.inserted_text);
+  const deleted = normalizeBlockText(edit.deleted_text);
+  if (!inserted && !deleted) return null;
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 p-3 font-mono text-[11.5px] leading-relaxed">
+      {deleted ? <p className="whitespace-pre-wrap text-destructive/80 line-through">{deleted}</p> : null}
+      {inserted ? <p className="whitespace-pre-wrap text-success">{inserted}</p> : null}
+    </div>
+  );
+}
+
+function hasWikiChangeDetails(event: ActivityEvent) {
+  const edit = event.wiki_edit;
+  if (!edit) return false;
+  return Boolean(normalizeBlockText(edit.inserted_text) || normalizeBlockText(edit.deleted_text));
+}
+
+function normalizeBlockText(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return trimmed.length > 600 ? `${trimmed.slice(0, 597).trimEnd()}...` : trimmed;
 }
 
 function RunDetails({
@@ -659,6 +843,23 @@ function eventHrefFor(event: ActivityEvent, projectId: string): string | null {
     event.event_type === "wiki_edit_accepted" ||
     event.event_type === "wiki_edit_rejected"
   ) {
+    const sourceId = typeof event.metadata.source_material_id === "string"
+      ? event.metadata.source_material_id
+      : null;
+    const docSlug = typeof event.metadata.target_doc_slug === "string"
+      ? event.metadata.target_doc_slug
+      : null;
+    const editId = typeof event.metadata.edit_id === "string" ? event.metadata.edit_id : null;
+    if (sourceId) {
+      const params = new URLSearchParams({ source: sourceId });
+      if (editId) params.set("edit", editId);
+      return `/project/${projectId}/sources?${params.toString()}`;
+    }
+    if (docSlug) {
+      const params = new URLSearchParams({ doc: docSlug });
+      if (editId) params.set("edit", editId);
+      return `/project/${projectId}/wiki?${params.toString()}`;
+    }
     return `/project/${projectId}/wiki`;
   }
   if (event.event_type === "advisor_suggestion") {
