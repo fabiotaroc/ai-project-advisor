@@ -7,6 +7,10 @@
 - Date: 2026-04-07
 - Purpose: frame a possible productization path for the agent workspace at `/Users/taro/Projects/leadabeelity` and harness it as a standalone web app for non-technical users
 
+## Strategic Source Of Truth
+
+Start with `docs/PRODUCT_BRIEF.md` for the current product wedge, target user, status quo, validation assignment, and kill criteria. This PRD defines product requirements and scope; it should not relitigate the strategic thesis.
+
 ## 1. Product Summary
 
 ### Working Title
@@ -15,7 +19,7 @@ AI Project Advisor
 
 ### One-Line Pitch
 
-A collaborative web app that gives teams a persistent AI advisor grounded in their documents, emails, meeting notes, and operating memory, without requiring developer tools.
+A collaborative web app that keeps a living project brief updated from meetings, emails, notes, and files, with human approval and source-grounded answers.
 
 ### Why This Exists
 

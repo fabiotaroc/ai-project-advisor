@@ -1,34 +1,44 @@
 # AGENTS.md
 
-## General guidelines
+## General Guidelines
 
-Use `specflow` if the coding task is major and complex. Do not use `specflow` for minor fixes or refactorings. Within that workflow, use the approriate skills for the specifics Iterate with the user after every step, never complete the whole workflow yourself.
-You can find system specs in `flow/specs`. Start here when exploring the codebase for a problem.
+Use `specflow` if the coding task is major and complex. Do not use `specflow` for minor fixes or refactorings. Within that workflow, use the appropriate skills for the specifics. Iterate with the user after every step; never complete the whole workflow yourself.
+
+Start with the relevant documentation lane:
+
+- `docs/PRODUCT_BRIEF.md` for the current strategic source of truth and product wedge.
+- `docs/PRD.md` for product requirements, user-facing scope, and business framing.
+- `docs/MARKET_POSITIONING.md` for competitor pressure, differentiation, and strategic validation.
+- `docs/ROADMAP.md` for current priorities, sequencing, and deferred ideas.
+- `flow/specs/*` for durable product and system requirements. Start here when exploring behavior for a problem.
+- `flow/changes/*` for active proposals, delta specs, and implementation plans.
+- `TODO.md` only for rough inbox notes that have not yet been promoted.
 
 
-## Product Vision And Rules
+## Product North Star
 
-This product is an AI project workspace for project delivery teams, especially non-technical consultants, implementation teams, PMs, and operations leads who manage multiple client or internal projects across changing teams, meetings, documents, emails, and deliverables.
+Keep this product context in sight for every feature:
 
-The product should stay focused on this vertical niche. If it becomes a generic AI workspace, users will default back to ChatGPT or their existing tools. Its advantage comes from being purpose-built for consulting and implementation-style project work: repeated context switching, multiple parallel projects, handovers, client-facing outputs, decisions, action items, and long-running project memory.
+AI Project Advisor keeps a living project brief updated from meetings, emails, notes, and files, with human approval. It helps PM-like consultants, engagement managers, delivery leads, and project coordinators preserve trusted project memory across messy multi-stakeholder work.
 
-The long-term vision combines:
-- Notion-like collaboration: shared workspaces, structured knowledge, team-visible artifacts, and durable project memory.
-- Codex-like flow: seamless chat with an agent that can inspect, reason over, and edit project documents in the same workspace.
-- OpenClaw-like personalization: an intelligent assistant tailored to the user, team, project context, working style, and accumulated memory.
-- Office-style output creation: document workflows like Word first, with room later for PowerPoint, Excel, and other structured workplace outputs.
+The product should stay vertical. If it becomes a generic AI workspace, users will default back to ChatGPT, Notion AI, ClickUp Brain, or their existing tools. Its advantage comes from controlled project memory formation: messy evidence becomes official, reviewable project understanding.
 
-The product should feel like:
-- a shared project brain
-- an AI project advisor / Project Management partner
+The experience should feel like:
+
+- a calm living project brief
+- an AI project advisor / project management partner
 - a living wiki plus source library
-- a workspace that can help create practical deliverables
+- a workspace that can help create useful deliverables
 
 It should not feel like:
+
 - a developer tool
 - a generic chatbot with uploads
 - a raw document repository with an AI wrapper
+- a task manager or ClickUp/Notion clone
 - a filesystem users have to manage manually
+
+For fuller strategy and sequencing, use `docs/PRODUCT_BRIEF.md` first, then `docs/PRD.md` and `docs/ROADMAP.md`.
 
 ### Core Product Principles
 
