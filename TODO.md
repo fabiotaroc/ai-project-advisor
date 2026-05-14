@@ -9,7 +9,6 @@
 
 ### Meetings:
 [ ] editable sections (summary, decisions, action items, risks, open questions)
-[x] Transcript ingestion pipeline api call:
 
 ### Agent memory:
 [ ] Add tool for advisor to read activity log (table in supabase) as a proxy for the daily memory kind of thing that OpenClaw has. maybe push last few activity rows into the advisor context.
@@ -17,10 +16,11 @@
 [x] add date to the advisor prompt
 
 ### Chat:
-[x] pending edits in the sidepanel instead of in chat.
+[ ] open chat panel from meetings, emails, files, pages to the right of the current panel. Like mike has.
 [ ] add tag files to chat messages (like mike has)
 [ ] citation pills for docs as well.
 [ ] Incognito chat feature (memory not saved and other team members cannot see it)
+[x] pending edits in the sidepanel instead of in chat.
 [x] Scroll-to-bottom overlay (circular control) when the message list is scrolled away from the latest message; re-stick to bottom on send and while streaming unless the user scrolls up
 
 
