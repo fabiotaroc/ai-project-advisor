@@ -1,16 +1,22 @@
 # Manufacturing Quality / CAPA Market Scan
 
-Date: 2026-05-15
+Date: 2026-05-16
 
 ## Executive Take
 
-CAPA is a real market, but a startup should not position as "another QMS." The strongest wedge is an AI investigation and evidence-preparation layer that works around existing QMS, ERP, MES, email, spreadsheets, and document stores.
+CAPA is a real market, but a startup should not position as "another QMS." The strongest wedge is an AI investigation and evidence-preparation layer that works around existing QMS, ERP, MES, PLM, email, spreadsheets, and document stores.
 
 Italy is a credible beachhead because it has a large manufacturing base and strong regulated manufacturing niches, but Italy-only is probably not venture-scale. The VC-scale version needs to expand to Europe or global regulated manufacturing: medical devices, pharma, aerospace, automotive, industrial machinery, food, chemicals, and electronics.
 
 Best concise positioning:
 
 > AI copilot for quality investigations: turn complaints, nonconformances, supplier issues, emails, and test evidence into reviewable CAPA drafts and audit-ready evidence packs.
+
+Updated thesis after reviewing the "system of intelligence" framing:
+
+> QMS is the system of record. The startup opportunity is the system of intelligence for manufacturing quality investigations.
+
+The product should not try to own the regulated record first. It should own the messy reasoning layer before and around the record: what happened, where the evidence lives, whether this issue has happened before, which lots/components/suppliers may be affected, what is missing, and what should be written back into QMS.
 
 ## Market Size
 
@@ -40,6 +46,30 @@ The timing is plausible because:
 - CAPA, complaints, nonconformances, audits, supplier quality, and change control are already structured workflows with clear artifacts.
 - Incumbents are adding AI, which validates the direction but also raises the competitive bar.
 - Quality teams face pressure to reduce cycle time, improve audit readiness, and detect recurring issues across fragmented systems.
+- The AI platform shift makes it more plausible to build a cross-system reasoning layer above legacy systems of record.
+
+## System Of Intelligence Framing
+
+The most useful analogy is CRM. Salesforce remains the system of record, but AI-native tools can become the system of intelligence by reading across CRM, email, calls, calendar, support tickets, product usage, and documents, then prioritizing what the seller should do next.
+
+For manufacturing quality, the same pattern applies:
+
+- QMS stores CAPAs, complaints, audits, documents, training, and formal approvals.
+- ERP stores lots, suppliers, purchase orders, inventory, cost, and shipments.
+- MES stores production events, routing, line data, process conditions, and test records.
+- PLM stores drawings, revisions, BOMs, components, and engineering changes.
+- Email, Teams, Excel, SharePoint, and supplier portals store much of the real investigation context.
+
+The product opportunity is to reason across these systems and produce source-grounded outputs:
+
+- "This supplier defect resembles three prior SCARs."
+- "This CAPA is missing effectiveness evidence and is due in five days."
+- "This complaint may affect these lots, suppliers, or component revisions."
+- "This proposed root cause says operator error, but no systemic corrective action is defined."
+- "This audit finding maps to an unresolved CAPA from last quarter."
+- "These complaints cluster around the same component revision or process step."
+
+This reframes the market from a CAPA form-filling tool to a vertical system of intelligence for manufacturing quality.
 
 ## Core Customer Pain
 
@@ -75,6 +105,93 @@ Likely buyers:
 - Director of Quality Systems
 - Operations leadership in mid-market manufacturing
 - Quality/Regulatory leadership in medtech, pharma, aerospace, or automotive suppliers
+
+## Job Posting Signal
+
+Three real Italy-based job postings were reviewed as qualitative market signals. They suggest the workflow is not Beretta-specific and appears across large manufacturing, industrial, and medtech companies.
+
+### Bridgestone EMEA: Manufacturing Quality Specialist
+
+Fit: strong, but more strategic and platform-level.
+
+Relevant responsibilities:
+
+- Digital Quality roadmap implementation / Quality 4.0.
+- Manufacturing quality support to new process industrialization.
+- PFMEA, DFMEA, DRBFM linkage, quality characteristics, risk assessment.
+- Measurement technologies, control strategies, inspection tools, data analysis.
+- Root cause analysis, corrective actions, horizontal extension, GMP/global policy compliance.
+- Quality standards, Co PFMEA updates, plant support, management reporting.
+
+Likely product value:
+
+- Cross-plant quality intelligence and reporting.
+- Risk reduction action tracking.
+- PFMEA/control-plan evidence support.
+- Root-cause investigation summaries.
+- Quality standards and documentation updates.
+- Recurring issue detection across plants, product families, and technologies.
+
+Implication:
+
+Bridgestone validates the bigger "Quality 4.0 intelligence layer" vision, but it may be a harder MVP because the role likely expects enterprise analytics, integrations, governance, and cross-plant deployment.
+
+### ABB: Quality Control Specialist
+
+Fit: very strong for customer claims, field failure, RCA, and CAPA.
+
+Relevant responsibilities:
+
+- Internal controls, customer/stakeholder requirements, APQP, product lifecycle quality.
+- Local QMS procedures and documentation.
+- Audits, quality data analytics, risks, failures, nonconformances.
+- Corrective and preventive actions managed to closure.
+- Customer claims resolution, root-cause failure analysis, field failure data, customer KPIs.
+
+Likely product value:
+
+- Customer claim intake to investigation summary.
+- Field failure data to recurring failure themes.
+- Nonconformance to CAPA draft.
+- Audit finding to corrective action plan.
+- QMS documentation and evidence-linked guidance.
+- RCA support using DMAIC, 8D, and Ishikawa.
+
+Implication:
+
+ABB is a clean ICP example for "customer claims and nonconformance investigation copilot." The product must complement SAP, QMS, Power BI, and local quality systems rather than replace them.
+
+### Enovis: Supplier Quality Engineer
+
+Fit: extremely strong for the supplier quality / SCAR wedge.
+
+Relevant responsibilities:
+
+- Supplier qualification, surveillance, audits, monitoring, and revaluation.
+- Quality records and QMS procedures.
+- Supplier quality KPIs, nonconformity trends, root cause investigations.
+- Supplier improvement/correction plans after audits, product nonconformities, and SCARs.
+- Supplier process validation records.
+- R&D and technical documentation updates.
+- Complaints related to outsourced production.
+- Incoming inspection nonconformities.
+- Regulatory/notified-body inspection support.
+- Initial sampling process.
+
+Likely product value:
+
+- Supplier audit finding to corrective action request.
+- Incoming inspection nonconformity to supplier issue summary.
+- Supplier KPI and trend analysis to supplier risk summary.
+- SCAR draft generation and supplier response review.
+- Evidence checklist before SCAR closure.
+- Supplier qualification dossier.
+- Complaint-to-supplier investigation timeline.
+- Initial sampling documentation support.
+
+Implication:
+
+Enovis is the strongest signal for a focused startup wedge. Supplier quality is naturally fragmented across suppliers, procurement, R&D, incoming inspection, regulatory, technical documentation, email, Excel, and QMS.
 
 ## Competitive Landscape
 
@@ -148,6 +265,10 @@ Output: Supplier Corrective Action Request, evidence pack, recurring supplier is
 
 Why attractive: cross-company evidence is messy; supplier follow-up is painful; recurrence tracking matters.
 
+Current assessment: strongest initial wedge.
+
+Reason: Supplier Quality Engineers have a repeated artifact, fragmented evidence, external stakeholder coordination, supplier recurrence risk, audit pressure, and clear handoff into QMS/procurement/regulatory workflows. The Enovis job posting is a strong ICP signal.
+
 ### 2. Customer Complaint To CAPA Draft
 
 Inputs: customer complaint, field data, inspection reports, lot records, prior complaints, engineering comments.
@@ -155,6 +276,10 @@ Inputs: customer complaint, field data, inspection reports, lot records, prior c
 Output: CAPA draft, timeline, affected lot analysis, customer response.
 
 Why attractive: high urgency and strong documentation need.
+
+Current assessment: second strongest wedge.
+
+Reason: ABB's posting shows a clean operational workflow around customer claims, field failures, RCA, nonconformances, and CAPA closure. This wedge has strong urgency and measurable cycle-time KPIs.
 
 ### 3. Audit Finding Response
 
@@ -171,6 +296,10 @@ Inputs: R&D handoffs, pre-series tests, defects, component revisions, customer f
 Output: product/version quality dossier, readiness checklist, open issue tracker.
 
 Why attractive: close to the Beretta/Mirko workshop pattern, but may be more company-specific than CAPA.
+
+Current assessment: strategically interesting but less obviously standardized.
+
+Reason: the Beretta/Mirko workshop showed real pain around product quality documentation, design review lifecycle gaps, pre-series testing, customer defect inputs, component-code proliferation, and product/version traceability. This may be a valuable workflow inside complex manufacturers, but it could be more company-specific than SCAR, customer claims, or CAPA.
 
 ## KPIs To Sell
 
@@ -221,19 +350,21 @@ What is risky:
 
 Most VC-plausible thesis:
 
-> Regulated manufacturers already use QMS as the system of record, but quality investigations still happen manually across fragmented evidence. The next quality platform is not another database; it is an AI investigation layer that prepares defensible, source-grounded quality records across QMS, ERP, MES, PLM, documents, and communications.
+> Regulated manufacturers already use QMS as the system of record, but quality investigations still happen manually across fragmented evidence. The next quality platform is not another database; it is the system of intelligence for manufacturing quality: an AI layer that prepares defensible, source-grounded investigations across QMS, ERP, MES, PLM, documents, and communications.
 
 ## Recommendation
 
 Do not build a generic CAPA module.
 
-Validate one of these narrow workflows first:
+Validate one of these narrow workflows first, in this order:
 
-1. Customer complaint -> CAPA draft + evidence pack.
-2. Supplier defect -> SCAR draft + recurrence history.
+1. Supplier defect -> SCAR draft + recurrence history.
+2. Customer complaint -> CAPA draft + evidence pack.
 3. Audit finding -> corrective action plan + evidence checklist.
 
 The best early customer profile is probably a mid-market regulated manufacturer that already has quality pain but does not have a deeply customized enterprise QMS AI program.
+
+The practical MVP should not require replacing QMS. It should ingest a quality case packet, draft the investigation artifact, link evidence, detect missing information, find similar prior issues, and export/copy structured output into the customer's existing system of record.
 
 ## Sources
 
@@ -246,3 +377,4 @@ The best early customer profile is probably a mid-market regulated manufacturer 
 - [ETQ: Corrective Action Software](https://www.etq.com/corrective-action-management/)
 - [Veeva Quality Cloud](https://www.veeva.com/products/quality-cloud/)
 - [Qualio CAPA Management Software](https://www.qualio.com/product/capa-management-software)
+- [a16z: From System of Record to System of Intelligence](https://www.a16z.news/p/from-system-of-record-to-system-of)
